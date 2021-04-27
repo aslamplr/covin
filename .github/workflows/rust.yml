@@ -23,8 +23,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - run: cd api/
     - name: Build
-      run: cargo build --verbose
+      run: cd api/ && cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cd api/ && cargo test --verbose
