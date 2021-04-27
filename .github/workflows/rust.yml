@@ -5,11 +5,13 @@ on:
     branches: [ main ]
     paths: 
       - "api/*"
+      - ".github/workflows/*"
 
   pull_request:
     branches: [ main ]
     paths: 
       - "api/*"
+      - ".github/workflows/*"
 
 env:
   CARGO_TERM_COLOR: always
