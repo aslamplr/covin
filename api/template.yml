@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >- 
+  An AWS Serverless Specification template describing your function.
+
+Transform: 
+- AWS::Serverless-2016-10-31
+
+Resources:
+  myCovinProxy:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: hello.handler
+      Runtime: provided.al2
+      CodeUri: .
+      Description: Covin Proxy
+      MemorySize: 128
+      Timeout: 3
+      Events:
+        Api1:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      Environment:
+        Variables:
+          BASE_URL: https://provide.actual.api.url/api
+          BEARER_TOKEN: >-
+            Update value with real bearer token
+          DISTRICTS_URL: https://provide.dashboard.url/assets/json/csvjson.json
+    Metadata:
+      BuildMethod: makefile
+
