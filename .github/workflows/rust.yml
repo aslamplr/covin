@@ -23,9 +23,19 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: aslamplr/lambda-rust
+      volumes: 
+        - ${{ github.workspace }}:/code
+        - /home/github/.cargo/registry:/root/.cargo/registry
+        - /home/github/.cargo/git:/root/.cargo/git 
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: AWS lambda build
+        run: /usr/local/bin/build.sh
+      - run: ls -l target/lambda/release
+      - name: SAM build
+        run: sam build
+      - name: SAM deploy
+        run: echo "sam deploy not done now"
+
