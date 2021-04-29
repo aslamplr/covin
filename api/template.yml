@@ -17,8 +17,8 @@ Resources:
       MemorySize: 128
       Timeout: 3
       Events:
-        Api1:
-          Type: Api
+        Api:
+          Type: HttpApi
           Properties:
             Path: /{proxy+}
             Method: ANY
@@ -30,4 +30,3 @@ Resources:
           DISTRICTS_URL: https://provide.dashboard.url/assets/json/csvjson.json
     Metadata:
       BuildMethod: makefile
-

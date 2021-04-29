@@ -1,2 +1,4 @@
+envs.json
+samconfig.toml
 /target
 /.aws-sam
