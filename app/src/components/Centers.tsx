@@ -47,6 +47,9 @@ export default function Centers({ centers }: Props) {
                         Pin: {center.pincode}
                       </div>
                       <div className="text-sm text-gray-500">
+                        Fee Type: {center.fee_type}
+                      </div>
+                      <div className="text-sm text-gray-500">
                         📍 Lat: {center.lat}; Long: {center.long}
                       </div>
                     </td>
@@ -66,6 +69,9 @@ export default function Centers({ centers }: Props) {
                             </h3>
                             <div className="text-sm text-gray-800">
                               Available Capacity: {session.available_capacity}
+                            </div>
+                            <div className="text-sm text-gray-800">
+                              Minimum Age Requirement: {session.min_age_limit}
                             </div>
                             <div className="text-sm text-gray-800">
                               Slots: {session.slots.join(", ")}
