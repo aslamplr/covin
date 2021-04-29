@@ -28,6 +28,7 @@ export interface Center {
 export interface Session {
   session_id: string;
   available_capacity: number;
+  min_age_limit: number;
   date: string;
   slots: string[];
 }
@@ -40,8 +41,9 @@ function padString(numStr: number, padStr: string, len: number): string {
 
 export async function getCenters(
   districtId: number = 296,
-  vaccine: string = "COVISHIELD"
+  vaccine: string,
 ): Promise<CenterResponse> {
+  const vaccTypeQuery = vaccine === 'ANY' ? '' : `&vaccine=${vaccine}`;
   const currentDate = new Date();
   currentDate.setDate(currentDate.getDate() + 1);
   const date = `${padString(currentDate.getDate(), "0", 2)}-${padString(
@@ -51,7 +53,7 @@ export async function getCenters(
   )}-${currentDate.getFullYear()}`;
   try {
     const resp = await fetch(
-      `${BASE_URL}/centers?district_id=${districtId}&date=${date}&vaccine=${vaccine}`
+      `${BASE_URL}/centers?district_id=${districtId}&date=${date}${vaccTypeQuery}`
     );
     const json = await resp.json();
     return json;
@@ -65,7 +67,7 @@ export async function getDistricts(): Promise<District[]> {
   try {
     const resp = await fetch(`${BASE_URL}/districts`);
     const json: District[] = await resp.json();
-    return json.filter(({ state_id, district_name }) => state_id === 17);
+    return json.filter(({ state_id }) => state_id === 17);
   } catch (error) {
     console.error("An error occured,", error);
     throw Error("An error occured");
