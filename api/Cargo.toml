@@ -13,3 +13,9 @@ warp_lambda = "0.1"
 reqwest = { version = "0.11", features = ["rustls-tls", "json", "gzip"] }
 http-api-problem = { version = "0.50", features = ["warp"] }
 once_cell = "1.7"
+tracing = "0.1"
+
+[dependencies.tracing-subscriber]
+version = "0.2"
+default-features = false
+features = ["env-filter", "smallvec", "fmt", "chrono", "tracing-log", "json"] 
