@@ -51,14 +51,14 @@ async fn main() -> Result<()> {
         .allow_any_origin()
         .build();
 
-    let cors_route = warp::options()
-        .map(warp::reply)
-        .with(cors.clone());
-
     let routes = warp::path("api")
-        .and(districts.or(centers).or(cors_route).with(cors))
+        .and(districts.or(centers))
         .recover(problem::unpack)
-        .with(warp::log("covin::proxy"));
+        .with(warp::log("covin::proxy"))
+        .with(cors);
+
+    // To serve locally uncomment the following 
+    // warp::serve(routes).run(([127, 0, 0, 1], 3000)).await;
 
     warp_lambda::run(warp::service(routes)).await?;
 
