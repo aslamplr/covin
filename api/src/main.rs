@@ -9,7 +9,6 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 static BASE_URL: Lazy<String> = Lazy::new(|| env::var("BASE_URL").unwrap());
 static DISTRICTS_URL: Lazy<String> = Lazy::new(|| env::var("DISTRICTS_URL").unwrap());
-static BEARER_TOKEN: Lazy<String> = Lazy::new(|| env::var("BEARER_TOKEN").unwrap());
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -100,7 +99,6 @@ async fn get_all_centers_by_district(
             "{}/{}",
             *BASE_URL, "v2/appointment/sessions/calendarByDistrict"
         ))
-        .bearer_auth(&*BEARER_TOKEN)
         .query(&[
             ("district_id", district_id),
             ("date", date),
