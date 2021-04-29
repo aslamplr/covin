@@ -5,6 +5,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use warp::Filter;
 use once_cell::sync::Lazy;
+use tracing_subscriber::fmt::format::FmtSpan;
 
 static BASE_URL: Lazy<String> = Lazy::new(|| env::var("BASE_URL").unwrap());
 static DISTRICTS_URL: Lazy<String> = Lazy::new(|| env::var("DISTRICTS_URL").unwrap());
@@ -12,6 +13,18 @@ static BEARER_TOKEN: Lazy<String> = Lazy::new(|| env::var("BEARER_TOKEN").unwrap
 
 #[tokio::main]
 async fn main() -> Result<()> {
+
+    // Filter traces based on the RUST_LOG env var, or, if it's not set,
+    // default to show the output of the example.
+    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,warp=debug".to_owned());
+
+    tracing_subscriber::fmt()
+        .json()
+        .with_env_filter(filter)
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
+
+
     let districts = warp::path("districts")
         .and(warp::get())
         .and(warp::path::end())
@@ -22,7 +35,8 @@ async fn main() -> Result<()> {
                 "Content-Type",
                 "application/json",
             ))
-        });
+        })
+        .with(warp::trace::named("districts"));
 
     let centers = warp::path("centers")
         .and(warp::get())
@@ -37,14 +51,15 @@ async fn main() -> Result<()> {
                 let centers = get_all_centers_by_district(&district_id, &date, &vaccine)
                     .await
                     .map_err(problem::build)?;
-                println!("{}", centers);
+                tracing::info!("centers: \n{}", centers);
                 Ok::<_, warp::reject::Rejection>(warp::reply::with_header(
                     centers,
                     "Content-Type",
                     "application/json",
                 ))
             },
-        );
+        )
+        .with(warp::trace::named("centers"));
 
     let cors = warp::cors()
         .allow_methods(vec!["GET"])
@@ -55,7 +70,8 @@ async fn main() -> Result<()> {
         .and(districts.or(centers))
         .recover(problem::unpack)
         .with(warp::log("covin::proxy"))
-        .with(cors);
+        .with(cors)
+        .with(warp::trace::request());
 
     // To serve locally uncomment the following 
     // warp::serve(routes).run(([127, 0, 0, 1], 3000)).await;

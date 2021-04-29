@@ -8,10 +8,12 @@ pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
 }
 
 pub fn pack(err: anyhow::Error) -> Problem {
-    let _err = match err.downcast::<Problem>() {
+    let err = match err.downcast::<Problem>() {
         Ok(problem) => return problem,
         Err(err) => err,
     };
+
+    tracing::error!("internal error occurred: {:#}", err);
 
     Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
 }
