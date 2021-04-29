@@ -65,13 +65,7 @@ export async function getDistricts(): Promise<District[]> {
   try {
     const resp = await fetch(`${BASE_URL}/districts`);
     const json: District[] = await resp.json();
-    return json.filter(
-      ({ state_id, district_name }) =>
-        state_id === 17 &&
-        ["kollam", "thiruvananthapuram", "alappuzha"].includes(
-          district_name.toLowerCase()
-        )
-    );
+    return json.filter(({ state_id, district_name }) => state_id === 17);
   } catch (error) {
     console.error("An error occured,", error);
     throw Error("An error occured");
