@@ -14,7 +14,7 @@ static DISTRICTS_URL: Lazy<String> = Lazy::new(|| env::var("DISTRICTS_URL").unwr
 async fn main() -> Result<()> {
     // Filter traces based on the RUST_LOG env var, or, if it's not set,
     // default to show the output of the example.
-    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,warp=debug".to_owned());
+    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
 
     tracing_subscriber::fmt()
         .json()
@@ -49,11 +49,12 @@ async fn main() -> Result<()> {
                     .await
                     .map_err(problem::build)?;
                 tracing::info!(
-                    "centers: date={}; district_id={}; vaccine={}; \n{}",
-                    date,
-                    district_id,
-                    vaccine.as_deref().unwrap_or_else(|| "*"),
-                    centers
+                    target: "covin::proxy",
+                    message = "vaccination centers",
+                    %date,
+                    %district_id,
+                    vaccine = vaccine.as_deref().unwrap_or_else(|| "*"),
+                    %centers
                 );
                 Ok::<_, warp::reject::Rejection>(warp::reply::with_header(
                     centers,
@@ -70,7 +71,7 @@ async fn main() -> Result<()> {
         .build();
 
     let routes = warp::path("api")
-        .and(districts.or(centers))
+        .and(centers.or(districts))
         .recover(problem::unpack)
         .with(warp::log("covin::proxy"))
         .with(cors)
