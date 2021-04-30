@@ -13,7 +13,7 @@ pub fn pack(err: anyhow::Error) -> Problem {
         Err(err) => err,
     };
 
-    tracing::error!("internal error occurred: {:#}", err);
+    tracing::error!(message = "internal error occurred", error = ?err);
 
     Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
 }
@@ -44,12 +44,17 @@ pub async fn unpack(rejection: Rejection) -> Result<impl Reply, Infallible> {
             .detail(format!("Request body is invalid. {}", e));
         reply_from_problem(&problem)
     } else if rejection.find::<warp::reject::MethodNotAllowed>().is_some() {
-        let problem =
-            Problem::with_title_and_type(http::StatusCode::METHOD_NOT_ALLOWED);
+        let problem = Problem::with_title_and_type(http::StatusCode::METHOD_NOT_ALLOWED);
+        reply_from_problem(&problem)
+    } else if rejection.find::<warp::reject::InvalidQuery>().is_some() {
+        let problem = Problem::with_title_and_type(http::StatusCode::BAD_REQUEST);
         reply_from_problem(&problem)
     } else {
-        let problem =
-            Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR);
+        tracing::error!(
+            message = "unhandled rejection while unpacking rejection",
+            ?rejection
+        );
+        let problem = Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR);
         reply_from_problem(&problem)
     };
 
