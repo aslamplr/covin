@@ -1,3 +1,5 @@
+use std::net::SocketAddrV4;
+
 use anyhow::Result;
 use covin_api::{alerts, centers, districts, problem};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -9,11 +11,14 @@ async fn main() -> Result<()> {
     // default to show the output of the example.
     let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
 
-    tracing_subscriber::fmt()
-        .json()
+    let tracing_builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
-        .with_span_events(FmtSpan::CLOSE)
-        .init();
+        .with_span_events(FmtSpan::CLOSE);
+    if std::env::var("RUN_WARP_LOCAL").map_or(true, |val| val.ne("true")) {
+        tracing_builder.json().init();
+    } else {
+        tracing_builder.init();
+    }
 
     let cors = warp::cors()
         .allow_methods(vec!["GET"])
@@ -31,10 +36,13 @@ async fn main() -> Result<()> {
         .with(cors)
         .with(warp::trace::request());
 
-    // To serve locally uncomment the following
-    // warp::serve(routes).run(([127, 0, 0, 1], 3000)).await;
-
-    warp_lambda::run(warp::service(routes)).await?;
+    // To serve locally set env RUN_WARP_LOCA=true
+    if std::env::var("RUN_WARP_LOCAL").map_or(false, |val| val.eq("true")) {
+        let addr = "127.0.0.1:3000".parse::<SocketAddrV4>()?;
+        warp::serve(routes).run(addr).await;
+    } else {
+        warp_lambda::run(warp::service(routes)).await?;
+    }
 
     Ok(())
 }
