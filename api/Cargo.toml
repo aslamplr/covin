@@ -19,3 +19,9 @@ tracing = "0.1"
 version = "0.2"
 default-features = false
 features = ["env-filter", "smallvec", "fmt", "chrono", "tracing-log", "json"] 
+
+[dependencies.dynomite]
+git = "https://github.com/softprops/dynomite.git"
+rev = "16c61ae635f0ea182709f64f1f47afa45e3561a8"
+default_features = false
+features = ["rustls"]
