@@ -15,6 +15,7 @@ reqwest = { version = "0.11", features = ["rustls-tls", "json", "gzip"] }
 http-api-problem = { version = "0.50", features = ["warp"] }
 once_cell = "1.7"
 tracing = "0.1"
+rusoto_core = { version = "0.46", default_features = false }
 
 [dependencies.tracing-subscriber]
 version = "0.2"
@@ -26,7 +27,3 @@ git = "https://github.com/softprops/dynomite.git"
 rev = "16c61ae635f0ea182709f64f1f47afa45e3561a8"
 default_features = false
 features = ["rustls"]
-
-[dependencies.rusoto_core]
-version = "0.46"
-default_features = false
