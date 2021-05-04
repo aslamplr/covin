@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.5", features = ["full"] }
 warp = { version = "0.3", default-features = false, features = ["multipart", "tls"] }
@@ -25,3 +26,7 @@ git = "https://github.com/softprops/dynomite.git"
 rev = "16c61ae635f0ea182709f64f1f47afa45e3561a8"
 default_features = false
 features = ["rustls"]
+
+[dependencies.rusoto_core]
+version = "0.46"
+default_features = false

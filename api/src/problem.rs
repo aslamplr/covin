@@ -3,6 +3,8 @@ use std::convert::Infallible;
 use warp::http;
 use warp::{Rejection, Reply};
 
+use crate::alerts::AlertError;
+
 pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
     warp::reject::custom(pack(err.into()))
 }
@@ -10,6 +12,20 @@ pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
 pub fn pack(err: anyhow::Error) -> Problem {
     let err = match err.downcast::<Problem>() {
         Ok(problem) => return problem,
+        Err(err) => err,
+    };
+
+    let err = match err.downcast::<AlertError>() {
+        Ok(alert_err) => match alert_err {
+            AlertError::NothingFound
+            | AlertError::UnableToGet(_)
+            | AlertError::UnableToParseAttr(_) => {
+                return Problem::with_title(http::StatusCode::NOT_FOUND)
+            }
+            AlertError::UnableToCreate(_) | AlertError::UnableToDelete(_) => {
+                return Problem::with_title(http::StatusCode::NOT_MODIFIED)
+            }
+        },
         Err(err) => err,
     };
 
