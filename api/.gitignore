@@ -1,3 +1,4 @@
+.env
 envs.json
 samconfig.toml
 /target
