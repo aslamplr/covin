@@ -1,4 +1,4 @@
-use crate::problem;
+use crate::{auth::{self, AuthClaims, AuthError}, problem};
 use dynomite::{
     attr_map,
     dynamodb::{
@@ -12,21 +12,65 @@ use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use warp::Filter;
+use warp_lambda::lambda_http::request::RequestContext;
+use serde_json::Value;
 
 const TABLE_NAME: &str = "CovinAlerts";
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    let lambda_auth = warp::any().and(warp::filters::ext::get::<RequestContext>()).and_then(|aws_req_context| async move {
+        let claims = match aws_req_context {
+            RequestContext::ApiGatewayV1(ctx) => {
+                let mut authorizer = ctx.authorizer;
+                let mut claims = authorizer
+                    .remove("claims")
+                    .ok_or_else(warp::reject::reject)?;
+                if let Value::String(cognito_username) = claims["cognito:username"].take() {
+                    Ok(AuthClaims {
+                        user_id: cognito_username,
+                        ..Default::default()
+                    })
+                } else {
+                    Err(AuthError::InvalidCredentials)
+                }
+            }
+            RequestContext::ApiGatewayV2(ctx) => {
+                let authorizer = ctx.authorizer.ok_or_else(warp::reject::reject)?;
+                let mut jwt = authorizer.jwt.ok_or_else(warp::reject::reject)?;
+                if let Some(cognito_username) = jwt.claims.remove("cognito:username") {
+                    Ok(AuthClaims {
+                        user_id: cognito_username,
+                        ..Default::default()
+                    })
+                } else {
+                    Err(AuthError::InvalidCredentials)
+                }
+            }
+            _ => Err(AuthError::InvalidCredentials),
+        };
+        claims.map_err(problem::build)
+    });
+
+    let auth = warp::any().and(warp::header::<String>("authorization")).and_then(|token: String| async move {
+        match auth::decode_token(&token).await {
+            Ok(auth_claims) => Ok(auth_claims),
+            Err(err) => Err(problem::build(err)),
+        }
+    });
+
+    let auth = lambda_auth.or(auth).unify();
+
     let retry_policy = Policy::Pause(3, std::time::Duration::from_millis(10));
     let client = DynamoDbClient::new(Default::default()).with_retries(retry_policy);
     let dynamo_db = warp::any().map(move || client.clone());
 
-    let get_alert = warp::path!(String)
-        .and(warp::get())
+    let get_alert = warp::get()
+        .and(auth)
         .and(dynamo_db.clone())
         .and_then(
-            |_user_id, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
+            |AuthClaims { user_id, .. }, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
                 let key = attr_map! {
-                    "user_id" => "abcdefgh".to_string()
+                    "user_id" => user_id
                 };
 
                 let res = dynamo_db
@@ -49,11 +93,13 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
 
     let create_alert = warp::post()
         .and(warp::path::end())
+        .and(auth)
         .and(warp::body::json())
         .and(dynamo_db.clone())
         .and_then(
-            |alert_payload: AlertPayload, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
-                let alert: Alert = alert_payload.into();
+            |AuthClaims { user_id, .. }, alert_payload: AlertPayload, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
+                let mut alert: Alert = alert_payload.into();
+                alert.user_id = user_id;
                 dynamo_db
                     .put_item(PutItemInput {
                         table_name: TABLE_NAME.to_string(),
@@ -69,13 +115,13 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
             },
         );
 
-    let delete_alert = warp::path!(String)
-        .and(warp::delete())
+    let delete_alert = warp::delete()
+        .and(auth)
         .and(dynamo_db)
         .and_then(
-            |_user_id, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
+            |AuthClaims { user_id, .. }, dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
                 let key = attr_map! {
-                    "user_id" => "abcdefgh".to_string()
+                    "user_id" => user_id
                 };
 
                 dynamo_db
