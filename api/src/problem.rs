@@ -4,6 +4,7 @@ use warp::http;
 use warp::{Rejection, Reply};
 
 use crate::alerts::AlertError;
+use crate::auth::{AuthError, VerifierError};
 
 pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
     warp::reject::custom(pack(err.into()))
@@ -12,6 +13,24 @@ pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
 pub fn pack(err: anyhow::Error) -> Problem {
     let err = match err.downcast::<Problem>() {
         Ok(problem) => return problem,
+        Err(err) => err,
+    };
+
+    let err = match err.downcast::<AuthError>() {
+        Ok(auth_error) => match auth_error {
+            AuthError::InvalidCredentials => {
+                return Problem::with_title(http::StatusCode::UNAUTHORIZED)
+            }
+            AuthError::VerifierError(error) => match error {
+                VerifierError::BiscuitError(err) => {
+                    tracing::warn!(message = "buiscuit error", error = ?err);
+                    return Problem::with_title(http::StatusCode::UNAUTHORIZED)
+                }
+                VerifierError::JWKSGet(_) => {
+                    return Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            },
+        },
         Err(err) => err,
     };
 
