@@ -6,7 +6,7 @@ use warp::Filter;
 
 use crate::problem;
 
-static BASE_URL: Lazy<String> = Lazy::new(|| env::var("BASE_URL").unwrap());
+static CONFIG: Lazy<CentersConfig> = Lazy::new(|| CentersConfig::init());
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path("centers")
@@ -53,11 +53,20 @@ async fn get_all_centers_by_district(
         query
     };
     let client = reqwest::Client::new();
+    let headers = {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::USER_AGENT, CONFIG.user_agent_header.parse().unwrap());
+        headers.insert(reqwest::header::REFERER, CONFIG.referer_header.parse().unwrap());
+        headers.insert(reqwest::header::ORIGIN, CONFIG.origin_header.parse().unwrap());
+        headers
+    };
+
     let centers = client
         .get(format!(
             "{}/{}",
-            *BASE_URL, "v2/appointment/sessions/calendarByDistrict"
+            CONFIG.base_url, "v2/appointment/sessions/calendarByDistrict"
         ))
+        .headers(headers)
         .query(&query)
         .send()
         .await?
@@ -71,4 +80,27 @@ struct CenterQueryParams {
     district_id: String,
     date: String,
     vaccine: Option<String>,
+}
+
+#[derive(Debug)]
+struct CentersConfig {
+    base_url: String,
+    user_agent_header: String,
+    referer_header: String,
+    origin_header: String,
+}
+
+impl CentersConfig {
+    fn init() -> Self {
+        let base_url = env::var("BASE_URL").unwrap();
+        let user_agent_header = env::var("USER_AGENT_HEADER").unwrap();
+        let referer_header = env::var("REFERER_HEADER").unwrap();
+        let origin_header = env::var("ORIGIN_HEADER").unwrap();
+        Self {
+            base_url,
+            user_agent_header,
+            referer_header,
+            origin_header
+        }
+    }
 }
