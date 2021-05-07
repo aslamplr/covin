@@ -24,12 +24,15 @@ pub fn pack(err: anyhow::Error) -> Problem {
             AuthError::VerifierError(error) => match error {
                 VerifierError::BiscuitError(err) => {
                     tracing::warn!(message = "buiscuit error", error = ?err);
-                    return Problem::with_title(http::StatusCode::UNAUTHORIZED)
+                    return Problem::with_title(http::StatusCode::UNAUTHORIZED);
                 }
                 VerifierError::JWKSGet(_) => {
                     return Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
                 }
             },
+            AuthError::VerifierNotImplemented => {
+                return Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
+            }
         },
         Err(err) => err,
     };

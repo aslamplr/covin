@@ -1,24 +1,33 @@
-use biscuit::{jwa::SignatureAlgorithm, jwk::JWKSet, Empty, JWT};
-use once_cell::sync::OnceCell;
+use biscuit::{jwa::SignatureAlgorithm, jwk::JWKSet, Empty, Validation, ValidationOptions, JWT};
+use once_cell::sync::{Lazy, OnceCell};
 use serde::{Deserialize, Serialize};
+use std::convert::{TryFrom, TryInto};
 use thiserror::Error;
+use warp_lambda::lambda_http::request::RequestContext;
 
+static JWKS_URL: Lazy<JwksIssUrls> = Lazy::new(|| {
+    let region_str = std::env::var("AWS_COGNITO_REGION").unwrap();
+    let pool_id_str = std::env::var("AWS_COGNITO_POOL_ID").unwrap();
+    let jwks_url = format!(
+        "https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json",
+        region_str, pool_id_str
+    );
+    let iss = format!(
+        "https://cognito-idp.{}.amazonaws.com/{}",
+        region_str, pool_id_str
+    );
+    JwksIssUrls { jwks_url, iss }
+});
 static JWK_SET: OnceCell<JWKSet<Empty>> = OnceCell::new();
+
+struct JwksIssUrls {
+    jwks_url: String,
+    iss: String,
+}
 
 async fn get_jwk_set<'t>() -> Result<&'t OnceCell<JWKSet<Empty>>, VerifierError> {
     if JWK_SET.get().is_none() {
-        let region_str = std::env::var("AWS_COGNITO_REGION").unwrap();
-        let pool_id_str = std::env::var("AWS_COGNITO_POOL_ID").unwrap();
-        let jwks_url = format!(
-            "https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json",
-            region_str, pool_id_str
-        );
-        let _iss = format!(
-            "https://cognito-idp.{}.amazonaws.com/{}",
-            region_str, pool_id_str
-        );
-
-        let jwk_set = reqwest::get(jwks_url)
+        let jwk_set = reqwest::get(&JWKS_URL.jwks_url)
             .await?
             .json::<JWKSet<Empty>>()
             .await?;
@@ -39,7 +48,11 @@ async fn validate_decode_jwt(jwt: &str) -> Result<PrivateClaims, VerifierError> 
     let decoded_token = encoded_token
         .decode_with_jwks(&jwks, Some(SignatureAlgorithm::RS256))
         .map_err(VerifierError::from)?;
-    decoded_token.validate(biscuit::ValidationOptions::default())?;
+
+    decoded_token.validate(ValidationOptions {
+        issuer: Validation::Validate(JWKS_URL.iss.to_owned()),
+        ..Default::default()
+    })?;
     Ok(decoded_token.payload()?.private.to_owned())
 }
 
@@ -65,14 +78,16 @@ pub enum AuthError {
     InvalidCredentials,
     #[error("Unable to verify")]
     VerifierError(#[from] VerifierError),
+    #[error("Unable to verify, not implemented")]
+    VerifierNotImplemented,
 }
 
 #[derive(Debug, Default)]
 pub struct AuthClaims {
     pub user_id: String,
-    pub client_id: Option<String>,
-    pub event_id: Option<String>,
-    pub scope: Option<String>,
+    pub client_id: String,
+    pub event_id: String,
+    pub scope: String,
 }
 
 impl From<PrivateClaims> for AuthClaims {
@@ -86,47 +101,86 @@ impl From<PrivateClaims> for AuthClaims {
     ) -> Self {
         AuthClaims {
             user_id: username,
-            client_id: Some(client_id),
-            event_id: Some(event_id),
-            scope: Some(scope),
+            client_id: client_id,
+            event_id: event_id,
+            scope: scope,
         }
     }
 }
 
-#[derive(Debug)]
-pub struct AuthToken<'tkn> {
-    token: &'tkn str,
+impl TryFrom<RequestContext> for AuthClaims {
+    type Error = AuthError;
+
+    fn try_from(ctx: RequestContext) -> Result<Self, Self::Error> {
+        match ctx {
+            RequestContext::ApiGatewayV2(ctx) => {
+                let mut jwt = ctx
+                    .authorizer
+                    .and_then(|authorizer| authorizer.jwt)
+                    .ok_or(AuthError::InvalidCredentials)?;
+                let auth_claims = {
+                    let mut auth_claims = AuthClaims {
+                        ..Default::default()
+                    };
+                    if let Some(username) = jwt.claims.remove("username") {
+                        auth_claims.user_id = username;
+                    } else {
+                        return Err(AuthError::InvalidCredentials);
+                    }
+                    if let Some(client_id) = jwt.claims.remove("client_id") {
+                        auth_claims.client_id = client_id;
+                    } else {
+                        return Err(AuthError::InvalidCredentials);
+                    };
+                    if let Some(event_id) = jwt.claims.remove("event_id") {
+                        auth_claims.event_id = event_id;
+                    } else {
+                        return Err(AuthError::InvalidCredentials);
+                    };
+                    if let Some(scope) = jwt.claims.remove("scope") {
+                        auth_claims.scope = scope;
+                    } else {
+                        return Err(AuthError::InvalidCredentials);
+                    };
+                    auth_claims
+                };
+                Ok(auth_claims)
+            }
+            _ => {
+                tracing::error!(message = "lambda request context cannot be verified, verifier not implemented", context = ?ctx);
+                Err(AuthError::VerifierNotImplemented)
+            }
+        }
+    }
 }
 
-impl AuthToken<'_> {
-    async fn decode(&self) -> Result<AuthClaims, AuthError> {
-        let tokens = self.token.split(' ').collect::<Vec<&str>>();
+impl AuthClaims {
+    async fn try_from<T: AsRef<str>>(t: T) -> Result<Self, AuthError> {
+        let tokens = t.as_ref().split(' ').collect::<Vec<&str>>();
         if tokens.len().ne(&2) {
             return Err(AuthError::InvalidCredentials);
         }
-        match (tokens[0], tokens[1]) {
-            ("Bearer", token) => {
-                let claims = validate_decode_jwt(token).await?;
-                Ok(claims.into())
-            }
-            _ => Err(AuthError::InvalidCredentials),
+        if let ("Bearer", token) = (tokens[0], tokens[1]) {
+            let claims = validate_decode_jwt(token).await?;
+            Ok(claims.into())
+        } else {
+            Err(AuthError::InvalidCredentials)
         }
-    }
-}
-
-impl<'tkn, T> From<&'tkn T> for AuthToken<'tkn>
-where
-    T: AsRef<str>,
-{
-    fn from(t: &'tkn T) -> Self {
-        Self { token: t.as_ref() }
     }
 }
 
 pub async fn decode_token(token: &str) -> Result<AuthClaims, AuthError> {
-    let token = AuthToken::from(&token);
-    tracing::debug!(message = "token", token = ?token);
-    match token.decode().await {
+    match AuthClaims::try_from(token).await {
+        Ok(claims) => Ok(claims),
+        Err(err) => {
+            tracing::error!(error = ?err, message = "Authentication Error");
+            Err(err)
+        }
+    }
+}
+
+pub fn decode_auth_ctx(req_ctx: RequestContext) -> Result<AuthClaims, AuthError> {
+    match req_ctx.try_into() {
         Ok(claims) => Ok(claims),
         Err(err) => {
             tracing::error!(error = ?err, message = "Authentication Error");
