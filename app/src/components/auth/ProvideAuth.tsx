@@ -14,7 +14,6 @@ export function ProvideAuth({ children }: React.PropsWithChildren<{}>) {
     return onAuthUIStateChange((nextAuthState, authData) => {
       setAuthState(nextAuthState);
       setUser(authData);
-      console.log(nextAuthState, authData);
     });
   }, []);
 
