@@ -4,10 +4,24 @@ import {
   AmplifySignIn,
   AmplifySignUp,
 } from "@aws-amplify/ui-react";
+import { AuthState } from "@aws-amplify/ui-components";
+import { withRouter, RouteComponentProps } from "react-router-dom";
 
-export default function Auth() {
+export default withRouter(({history, location, match}: RouteComponentProps) => {
+  const handleAuthStateChange = (nextAuthState: AuthState) => {
+    if (nextAuthState === AuthState.SignedIn) {
+      let redirectPath = "/";
+      if (location.state && (location.state as any).from) {
+        redirectPath = (location.state as any).from.pathname;
+      }
+      history.push(redirectPath);
+    }
+  };
   return (
-    <AmplifyAuthenticator usernameAlias="email">
+    <AmplifyAuthenticator
+      usernameAlias="email"
+      handleAuthStateChange={handleAuthStateChange}
+    >
       <AmplifySignUp
         slot="sign-up"
         usernameAlias="email"
@@ -41,4 +55,4 @@ export default function Auth() {
       <AmplifySignIn slot="sign-in" usernameAlias="email" />
     </AmplifyAuthenticator>
   );
-}
+});
