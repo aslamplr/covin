@@ -3,7 +3,11 @@ use std::net::SocketAddrV4;
 use anyhow::Result;
 use covin_api::{alerts, centers, districts, problem};
 use tracing_subscriber::fmt::format::FmtSpan;
-use warp::Filter;
+use warp::{
+    self,
+    http::{header, Method},
+    Filter,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,7 +26,9 @@ async fn main() -> Result<()> {
     }
 
     let cors = warp::cors()
-        .allow_methods(vec!["GET"])
+        .allow_methods(&[Method::GET, Method::POST, Method::DELETE])
+        .allow_header(header::CONTENT_TYPE)
+        .allow_header(header::AUTHORIZATION)
         .allow_any_origin()
         .build();
 
