@@ -1,6 +1,7 @@
 use crate::{
     auth::{self, AuthClaims},
     problem,
+    validation::with_validated_json,
 };
 use dynomite::{
     attr_map,
@@ -14,6 +15,7 @@ use dynomite::{
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use validator::Validate;
 use warp::Filter;
 use warp_lambda::lambda_http::request::RequestContext;
 
@@ -49,7 +51,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
                 "user_id" => user_id
             };
 
-            let res = dynamo_db
+            let res: AlertPayload = dynamo_db
                 .get_item(GetItemInput {
                     table_name: TABLE_NAME.to_string(),
                     key,
@@ -62,7 +64,8 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
                         .map(|mut item| Alert::from_attrs(&mut item).map_err(build_err))
                         .ok_or(AlertError::NothingFound)
                         .map_err(build_err)
-                })???;
+                })???
+                .into();
             Ok::<_, warp::Rejection>(warp::reply::json(&res))
         },
     );
@@ -70,7 +73,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
     let create_alert = warp::post()
         .and(warp::path::end())
         .and(auth)
-        .and(warp::body::json())
+        .and(with_validated_json())
         .and(dynamo_db.clone())
         .and_then(
             |AuthClaims { user_id, .. },
@@ -137,33 +140,39 @@ pub enum AlertError {
     UnableToDelete(#[from] RusotoError<DeleteItemError>),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Validate)]
+#[serde(rename_all = "camelCase")]
 struct AlertPayload {
+    #[validate]
     location: Location,
     district_id: u32,
+    #[validate(email)]
     email: String,
-    mobile_no: String,
+    #[validate(phone)]
+    mobile_no: Option<String>,
+    #[validate(range(min = 18))]
     age: u16,
-    year_of_birth: u16,
+    #[validate(range(min = 5))]
     kilometers: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Item)]
+#[derive(Debug, Clone, Item)]
 struct Alert {
     #[dynomite(partition_key)]
     user_id: String,
     location: Location,
     district_id: u32,
     email: String,
-    mobile_no: String,
+    mobile_no: Option<String>,
     age: u16,
-    year_of_birth: u16,
     kilometers: u32,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Attributes)]
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, Attributes)]
 struct Location {
+    #[validate(range(min = 8.0, max = 37.0))]
     lat: f32,
+    #[validate(range(min = 68.0, max = 98.0))]
     long: f32,
 }
 
@@ -175,7 +184,6 @@ impl From<AlertPayload> for Alert {
             email,
             mobile_no,
             age,
-            year_of_birth,
             kilometers,
         }: AlertPayload,
     ) -> Self {
@@ -186,7 +194,29 @@ impl From<AlertPayload> for Alert {
             email,
             mobile_no,
             age,
-            year_of_birth,
+            kilometers,
+        }
+    }
+}
+
+impl From<Alert> for AlertPayload {
+    fn from(
+        Alert {
+            location,
+            district_id,
+            email,
+            mobile_no,
+            age,
+            kilometers,
+            ..
+        }: Alert,
+    ) -> Self {
+        Self {
+            location,
+            district_id,
+            email,
+            mobile_no,
+            age,
             kilometers,
         }
     }
