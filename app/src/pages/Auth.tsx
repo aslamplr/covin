@@ -7,12 +7,13 @@ import {
 import { AuthState } from "@aws-amplify/ui-components";
 import { withRouter, RouteComponentProps } from "react-router-dom";
 
-export default withRouter(({history, location, match}: RouteComponentProps) => {
+export default withRouter(({history, location}: RouteComponentProps) => {
   const handleAuthStateChange = (nextAuthState: AuthState) => {
     if (nextAuthState === AuthState.SignedIn) {
       let redirectPath = "/";
-      if (location.state && (location.state as any).from) {
-        redirectPath = (location.state as any).from.pathname;
+      const locationState = location.state as { from: { pathname: string }};
+      if (locationState && locationState.from) {
+        redirectPath = locationState.from.pathname;
       }
       history.push(redirectPath);
     }
