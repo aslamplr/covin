@@ -1,19 +1,20 @@
 import { Fragment } from "react";
 import { Listbox, Transition } from "@headlessui/react";
 import { CheckIcon, SelectorIcon } from "@heroicons/react/solid";
+import { VaccineType } from "../services/api";
 
 function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(" ");
 }
 
 interface Props {
-  vaccTypes: string[],
+  vaccTypes: VaccineType[],
   selected: string,
-  onSelected: (sel: string) => void;
+  onSelected: (sel: VaccineType) => void;
 }
 
 export default function VaccSelect({ vaccTypes, selected, onSelected }: Props) {
-  const onSelectedHandler = (sel: string) => {
+  const onSelectedHandler = (sel: VaccineType) => {
     onSelected(sel);
   };
 

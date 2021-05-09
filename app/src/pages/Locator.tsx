@@ -1,14 +1,13 @@
 import React from "react";
-import { getDistricts, getCenters, District, Center } from "../services/api";
+import { getDistricts, getCenters, District, Center, VaccineType, VaccineTypes } from "../services/api";
 import DistrictSelect from "../components/DistrictSelect";
 import Centers from "../components/Centers";
 import VaccSelect from "../components/VaccSelect";
 
 export default function App() {
-  const vaccTypes = ["ANY", "COVISHIELD", "COVAXIN"];
   const [districts, setDistricts] = React.useState<District[]>([]);
   const [centers, setCenters] = React.useState<Center[]>([]);
-  const [vaccType, setVaccType] = React.useState<string>(vaccTypes[0]);
+  const [vaccType, setVaccType] = React.useState<VaccineType>(VaccineTypes[0]);
   const [district, setDistrict] = React.useState<District | undefined>(
     undefined
   );
@@ -19,7 +18,7 @@ export default function App() {
     });
   }, []);
 
-  const callGetCenters = (dist?: District, vacc: string = vaccTypes[0]) => {
+  const callGetCenters = (dist?: District, vacc: VaccineType = VaccineTypes[0]) => {
     setVaccType(vacc);
     if (dist) {
       setDistrict(dist);
@@ -33,7 +32,7 @@ export default function App() {
     callGetCenters(district, vaccType);
   };
 
-  const onVaccSelected = (vacc: string) => {
+  const onVaccSelected = (vacc: VaccineType) => {
     callGetCenters(district, vacc);
   };
 
@@ -56,7 +55,7 @@ export default function App() {
               <VaccSelect
                 selected={vaccType}
                 onSelected={onVaccSelected}
-                vaccTypes={vaccTypes}
+                vaccTypes={VaccineTypes}
               />
             </>
           )}
