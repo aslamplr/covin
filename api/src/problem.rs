@@ -81,6 +81,15 @@ pub async fn unpack(rejection: Rejection) -> Result<impl Reply, Infallible> {
             .title("Invalid Request Body.")
             .detail(format!("Request body is invalid. {}", e));
         reply_from_problem(&problem)
+    } else if let Some(errors) = rejection.find::<crate::validation::Error>() {
+        let problem = {
+            let mut problem = Problem::with_title_and_type(http::StatusCode::BAD_REQUEST)
+                .title("One or more validation errors occurred")
+                .detail("Please refer to the errors property for additional details");
+            problem.set_value("errors", errors.errors());
+            problem
+        };
+        reply_from_problem(&problem)
     } else if rejection.find::<warp::reject::MethodNotAllowed>().is_some() {
         let problem = Problem::with_title_and_type(http::StatusCode::METHOD_NOT_ALLOWED);
         reply_from_problem(&problem)
