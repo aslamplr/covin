@@ -11,6 +11,7 @@ import Navigation from "./components/Navigation";
 import Locator from "./pages/Locator";
 import Auth from "./pages/Auth";
 import Alerts from "./pages/Alerts";
+import TokenView from "./pages/__/token";
 
 auth.configure();
 
@@ -29,7 +30,7 @@ export default function App() {
   
 
   return (
-    <div>
+    <div className="bg-gray-100 overflow-auto">
       <ProvideAuth>
         <Router>
           <Navigation navigation={navigation} />
@@ -39,6 +40,9 @@ export default function App() {
             </Route>
             <PrivateRoute path="/alerts">
               <Alerts />
+            </PrivateRoute>
+            <PrivateRoute path="/__/token">
+              <TokenView />
             </PrivateRoute>
             <Route path="/">
               <Locator />
