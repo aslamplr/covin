@@ -1,5 +1,5 @@
 import React from "react";
-import { getDistricts, getCenters, District, Center, VaccineType, VaccineTypes } from "../services/api";
+import { getDistricts, findCenters, District, Center, VaccineType, VaccineTypes } from "../services/api";
 import DistrictSelect from "../components/DistrictSelect";
 import Centers from "../components/Centers";
 import VaccSelect from "../components/VaccSelect";
@@ -22,7 +22,7 @@ export default function App() {
     setVaccType(vacc);
     if (dist) {
       setDistrict(dist);
-      getCenters(dist.district_id, vacc).then(({ centers }) => {
+      findCenters(dist.district_id, vacc).then(({ centers }) => {
         setCenters(centers);
       });
     }

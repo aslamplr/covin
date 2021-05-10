@@ -1,6 +1,9 @@
 import { getAccessJwtToken } from "./auth";
 
+const SETU_BASE_URL = process.env.REACT_APP_SETU_BASE_URL;
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
+const ALL_CENTERS_URL = process.env.REACT_APP_ALL_CENTERS_URL;
+const ALL_DISTRICTS_URL = process.env.REACT_APP_ALL_DISTRICTS_URL;
 
 async function publicFetch(
   input: RequestInfo,
@@ -80,13 +83,43 @@ export interface Session {
   slots: string[];
 }
 
+export interface CenterDim {
+  centerId: number;
+  name: string;
+  districtId: number;
+  stateId: number;
+}
+
 function padString(numStr: number, padStr: string, len: number): string {
   let str = numStr.toString();
   while (str.length < len) str = padStr + str;
   return str;
 }
 
-export async function getCenters(
+let allCenters: Array<CenterDim> | undefined;
+
+export async function getAllCenters(): Promise<CenterDim[]> {
+  if (allCenters && allCenters.length) {
+    console.info(`Serving allCenters from api::cache!`);
+    return allCenters;
+  }
+  try {
+    const resp = await publicFetch(ALL_CENTERS_URL!);
+    const json = await resp.json();
+    allCenters = json;
+    return json;
+  } catch (error) {
+    console.error("An error occured", error);
+    throw Error("An error occured");
+  }
+}
+
+export async function getCenters(districtId: number): Promise<CenterDim[]> {
+  const centers = await getAllCenters();
+  return centers.filter(({ districtId: distId }) => districtId === distId);
+}
+
+export async function findCenters(
   districtId: number = 296,
   vaccine: VaccineType
 ): Promise<CenterResponse> {
@@ -100,11 +133,20 @@ export async function getCenters(
     2
   )}-${currentDate.getFullYear()}`;
   try {
-    const resp = await publicFetch(
-      `${BASE_URL}/centers?district_id=${districtId}&date=${date}${vaccTypeQuery}`
-    );
-    const json = await resp.json();
-    return json;
+    try {
+      const resp = await publicFetch(
+        `${SETU_BASE_URL}/v2/appointment/sessions/calendarByDistrict?district_id=${districtId}&date=${date}${vaccTypeQuery}`
+      );
+      const json = await resp.json();
+      return json;
+    } catch (error) {
+      console.warn(error);
+      const resp = await publicFetch(
+        `${BASE_URL}/centers?district_id=${districtId}&date=${date}${vaccTypeQuery}`
+      );
+      const json = await resp.json();
+      return json;
+    }
   } catch (error) {
     console.error("An error occured,", error);
     throw Error("An error occured");
@@ -113,9 +155,16 @@ export async function getCenters(
 
 export async function getDistricts(): Promise<District[]> {
   try {
-    const resp = await publicFetch(`${BASE_URL}/districts`);
-    const json: District[] = await resp.json();
-    return json.filter(({ state_id }) => state_id === 17);
+    try {
+      const resp = await publicFetch(ALL_DISTRICTS_URL!);
+      const json: District[] = await resp.json();
+      return json.filter(({ state_id }) => state_id === 17);
+    } catch (error) {
+      console.warn(error);
+      const resp = await publicFetch(`${BASE_URL}/districts`);
+      const json: District[] = await resp.json();
+      return json.filter(({ state_id }) => state_id === 17);
+    }
   } catch (error) {
     console.error("An error occured,", error);
     throw Error("An error occured");
