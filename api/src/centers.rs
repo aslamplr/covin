@@ -78,7 +78,15 @@ async fn get_all_centers_by_district(
         .headers(headers)
         .query(&query)
         .send()
-        .await?
+        .await
+        .and_then(|resp| {
+            let status = resp.status();
+            if status.is_success() || status.is_redirection() {
+                Ok(resp)
+            } else {
+                resp.error_for_status()
+            }
+        })?
         .text()
         .await?;
     Ok(centers)

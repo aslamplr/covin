@@ -23,6 +23,17 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
 }
 
 async fn get_all_districts() -> Result<String> {
-    let districts = reqwest::get(&*DISTRICTS_URL).await?.text().await?;
+    let districts = reqwest::get(&*DISTRICTS_URL)
+        .await
+        .and_then(|resp| {
+            let status = resp.status();
+            if status.is_success() || status.is_redirection() {
+                Ok(resp)
+            } else {
+                resp.error_for_status()
+            }
+        })?
+        .text()
+        .await?;
     Ok(districts)
 }
