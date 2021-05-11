@@ -27,8 +27,6 @@ const navigation = [
 ];
 
 export default function App() {
-  
-
   return (
     <div className="bg-gray-100 overflow-auto">
       <ProvideAuth>

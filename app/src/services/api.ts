@@ -153,16 +153,23 @@ export async function findCenters(
   }
 }
 
+let allDistricts: Array<District> | undefined;
+
 export async function getDistricts(): Promise<District[]> {
+  if (allDistricts && allDistricts.length) {
+    return allDistricts.filter(({ state_id }) => state_id === 17);
+  }
   try {
     try {
       const resp = await publicFetch(ALL_DISTRICTS_URL!);
       const json: District[] = await resp.json();
+      allDistricts = json;
       return json.filter(({ state_id }) => state_id === 17);
     } catch (error) {
       console.warn(error);
       const resp = await publicFetch(`${BASE_URL}/districts`);
       const json: District[] = await resp.json();
+      allDistricts = json;
       return json.filter(({ state_id }) => state_id === 17);
     }
   } catch (error) {
@@ -172,23 +179,22 @@ export async function getDistricts(): Promise<District[]> {
 }
 
 export interface Alert {
-  location: {
-    lat: number;
-    long: number;
-  };
+  centers: number[];
   districtId: number;
   email: string;
   mobileNo: string;
   age: number;
-  kilometers: number;
 }
 
-export async function getAlert(): Promise<Alert> {
+export async function getAlert(): Promise<Alert|undefined> {
   try {
     const resp = await authFetch(`${BASE_URL}/alerts/register`);
     const json: Alert = await resp.json();
     return json;
   } catch (error) {
+    if (error.status && error.status === 404) {
+      return;
+    }
     console.error("An error occured", error);
     throw Error("An error occured");
   }
