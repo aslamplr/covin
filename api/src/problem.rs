@@ -51,6 +51,27 @@ pub fn pack(err: anyhow::Error) -> Problem {
         Err(err) => err,
     };
 
+    let err: anyhow::Error = match err.downcast::<reqwest::Error>() {
+        Ok(req_err) => {
+            let status = req_err.status();
+            match (status, req_err.is_status()) {
+                (Some(status), true) => {
+                    let content = req_err.to_string();
+                    let problem = {
+                        let mut problem = Problem::with_title_and_type(status)
+                            .title("Proxy Error")
+                            .detail("A proxy error occured refer the errors property for details");
+                        problem.set_value("errors", &content);
+                        problem
+                    };
+                    return problem;
+                }
+                _ => req_err.into(),
+            }
+        }
+        Err(err) => err,
+    };
+
     tracing::error!(message = "internal error occurred", error = ?err);
 
     Problem::with_title_and_type(http::StatusCode::INTERNAL_SERVER_ERROR)
