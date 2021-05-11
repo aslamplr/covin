@@ -10,7 +10,7 @@ use dynomite::{
         PutItemError, PutItemInput,
     },
     retry::{Policy, RetryingDynamoDb},
-    AttributeError, Attributes, FromAttributes as _, Item, Retries,
+    AttributeError, FromAttributes as _, Item, Retries,
 };
 use rusoto_core::RusotoError;
 use serde::{Deserialize, Serialize};
@@ -79,8 +79,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
             |AuthClaims { user_id, .. },
              alert_payload: AlertPayload,
              dynamo_db: RetryingDynamoDb<DynamoDbClient>| async move {
-                let mut alert: Alert = alert_payload.into();
-                alert.user_id = user_id;
+                let alert: Alert = (alert_payload, user_id).into();
                 dynamo_db
                     .put_item(PutItemInput {
                         table_name: TABLE_NAME.to_string(),
@@ -143,58 +142,49 @@ pub enum AlertError {
 #[derive(Debug, Deserialize, Serialize, Validate)]
 #[serde(rename_all = "camelCase")]
 struct AlertPayload {
-    #[validate]
-    location: Location,
     district_id: u32,
+    #[validate(length(min = 1, max = 20))]
+    centers: Vec<u32>,
     #[validate(email)]
     email: String,
     #[validate(phone)]
     mobile_no: Option<String>,
     #[validate(range(min = 18))]
     age: u16,
-    #[validate(range(min = 5))]
-    kilometers: u32,
 }
 
 #[derive(Debug, Clone, Item)]
 struct Alert {
     #[dynomite(partition_key)]
     user_id: String,
-    location: Location,
     district_id: u32,
+    centers: Vec<u32>,
     email: String,
     mobile_no: Option<String>,
     age: u16,
-    kilometers: u32,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Validate, Attributes)]
-struct Location {
-    #[validate(range(min = 8.0, max = 37.0))]
-    lat: f32,
-    #[validate(range(min = 68.0, max = 98.0))]
-    long: f32,
-}
-
-impl From<AlertPayload> for Alert {
+impl<T: AsRef<str>> From<(AlertPayload, T)> for Alert {
     fn from(
-        AlertPayload {
-            location,
-            district_id,
-            email,
-            mobile_no,
-            age,
-            kilometers,
-        }: AlertPayload,
+        (
+            AlertPayload {
+                district_id,
+                centers,
+                email,
+                mobile_no,
+                age,
+            },
+            user_id,
+        ): (AlertPayload, T),
     ) -> Self {
+        let user_id = user_id.as_ref().to_string();
         Self {
-            user_id: "abcdefgh".into(),
-            location: Location { ..location },
+            user_id,
+            centers,
             district_id,
             email,
             mobile_no,
             age,
-            kilometers,
         }
     }
 }
@@ -202,22 +192,20 @@ impl From<AlertPayload> for Alert {
 impl From<Alert> for AlertPayload {
     fn from(
         Alert {
-            location,
             district_id,
+            centers,
             email,
             mobile_no,
             age,
-            kilometers,
             ..
         }: Alert,
     ) -> Self {
         Self {
-            location,
             district_id,
+            centers,
             email,
             mobile_no,
             age,
-            kilometers,
         }
     }
 }
