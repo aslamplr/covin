@@ -70,7 +70,7 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
         match res {
             Ok(res) => {
                 let centers = res.centers;
-                if centers.len() >= 1 {
+                if !centers.is_empty() {
                     let center_map = centers
                         .into_iter()
                         .filter(|center| {
@@ -137,7 +137,7 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
                             )
                         })
                         .collect::<Vec<String>>().join("\n");
-                        if centers_message.len() >= 1 {
+                        if !centers_message.is_empty() {
                             // Send email from here!
                             println!(
                                 "Center Availability for user_id={} {}\n{}",

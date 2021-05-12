@@ -101,9 +101,9 @@ impl From<PrivateClaims> for AuthClaims {
     ) -> Self {
         AuthClaims {
             user_id: username,
-            client_id: client_id,
-            event_id: event_id,
-            scope: scope,
+            client_id,
+            event_id,
+            scope,
         }
     }
 }
