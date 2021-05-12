@@ -1,4 +1,5 @@
 use anyhow::Error;
+use chrono::{Duration, FixedOffset, Utc};
 use covin_api::{
     alerts::Alert,
     centers::{get_all_centers_by_district_json, Center, Session},
@@ -14,6 +15,8 @@ use rusoto_core::RusotoError;
 use serde_json::{json, Value};
 use std::{collections::HashMap, convert::TryFrom};
 use tracing_subscriber::fmt::format::FmtSpan;
+
+const HOUR: i32 = 3600;
 
 #[tokio::main]
 async fn main() -> Result<(), LambdaError> {
@@ -38,8 +41,15 @@ async fn main() -> Result<(), LambdaError> {
     Ok(())
 }
 
+fn get_date_tomorrow() -> String {
+    let ist_offset = FixedOffset::east(5 * HOUR + HOUR / 2);
+    let ist_date_tomorrow = Utc::now() + ist_offset + Duration::days(1);
+    ist_date_tomorrow.format("%d-%m-%Y").to_string()
+}
+
 #[tracing::instrument]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
+    let date_tomorrow = get_date_tomorrow();
     let alerts = get_all_alert_configs().await?;
     let grouped =
         alerts
@@ -55,7 +65,8 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
             });
     for (district_id, alerts) in grouped {
         let res =
-            get_all_centers_by_district_json(&format!("{}", district_id), "13-05-2021", None).await;
+            get_all_centers_by_district_json(&format!("{}", district_id), &date_tomorrow, None)
+                .await;
         match res {
             Ok(res) => {
                 let centers = res.centers;

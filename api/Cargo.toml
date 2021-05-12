@@ -19,8 +19,11 @@ tracing = "0.1"
 rusoto_core = { version = "0.46", default_features = false }
 biscuit = "0.5"
 validator = { version = "0.13", features = ["derive", "phone"] }
+
+# Alert Engine dependencies
 lamedh_runtime = "0.3"
 futures = "0.3"
+chrono = "0.4"
 
 [dependencies.tracing-subscriber]
 version = "0.2"
