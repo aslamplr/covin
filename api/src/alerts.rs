@@ -178,14 +178,7 @@ impl<T: AsRef<str>> From<(AlertPayload, T)> for Alert {
         ): (AlertPayload, T),
     ) -> Self {
         let user_id = user_id.as_ref().to_string();
-        Self {
-            user_id,
-            centers,
-            district_id,
-            email,
-            mobile_no,
-            age,
-        }
+        Self { user_id, district_id, centers, email, mobile_no, age }
     }
 }
 

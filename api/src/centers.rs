@@ -6,7 +6,7 @@ use warp::Filter;
 
 use crate::problem;
 
-static CONFIG: Lazy<CentersConfig> = Lazy::new(|| CentersConfig::init());
+static CONFIG: Lazy<CentersConfig> = Lazy::new(CentersConfig::init);
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     warp::path("centers")
