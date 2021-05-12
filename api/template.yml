@@ -35,3 +35,30 @@ Resources:
           ORIGIN_HEADER: https://www.cowin.gov.in
     Metadata:
       BuildMethod: makefile
+
+  myCovinAlertEngine:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: hello.handler
+      Runtime: provided.al2
+      CodeUri: .
+      Description: Covin Alert Engine
+      MemorySize: 128
+      Timeout: 15
+      Events:
+        FMSchedule:
+          Type: Schedule
+          Properties:
+            Name: FiveMinuteSchedule
+            Schedule: 'rate(5 minutes)'
+            Description: Run every five minutes schedule
+            Enabled: True
+      Environment:
+        Variables:
+          BASE_URL: https://cdn-api.co-vin.in/api
+          RUST_LOG: debug
+          USER_AGENT_HEADER: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15
+          REFERER_HEADER: https://www.cowin.gov.in/
+          ORIGIN_HEADER: https://www.cowin.gov.in 
+    Metadata:
+      BuildMethod: makefile

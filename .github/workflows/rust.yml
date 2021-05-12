@@ -31,11 +31,14 @@ jobs:
         - /home/github/.cargo/git:/root/.cargo/git 
     steps:
       - uses: actions/checkout@v2
-      - name: AWS lambda build
+      - name: AWS lambda::covinProxy build
         run: /usr/local/bin/build.sh
+      - name: AWS lambda::convinAlertEngine build
+        run: /usr/local/bin/build.sh
+        env: 
+          BIN: alert-engine
       - run: ls -l target/lambda/release
       - name: SAM build
         run: sam build
       - name: SAM deploy
         run: echo "sam deploy not done now"
-
