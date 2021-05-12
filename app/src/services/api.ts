@@ -61,7 +61,7 @@ export interface CenterResponse {
 }
 
 export interface Center {
-  center_id: string;
+  center_id: number;
   name: string;
   state_name: string;
   district_name: string;

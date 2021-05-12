@@ -154,14 +154,14 @@ struct AlertPayload {
 }
 
 #[derive(Debug, Clone, Item)]
-struct Alert {
+pub struct Alert {
     #[dynomite(partition_key)]
-    user_id: String,
-    district_id: u32,
-    centers: Vec<u32>,
-    email: String,
-    mobile_no: Option<String>,
-    age: u16,
+    pub user_id: String,
+    pub district_id: u32,
+    pub centers: Vec<u32>,
+    pub email: String,
+    pub mobile_no: Option<String>,
+    pub age: u16,
 }
 
 impl<T: AsRef<str>> From<(AlertPayload, T)> for Alert {

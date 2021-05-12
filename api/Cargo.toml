@@ -19,6 +19,8 @@ tracing = "0.1"
 rusoto_core = { version = "0.46", default_features = false }
 biscuit = "0.5"
 validator = { version = "0.13", features = ["derive", "phone"] }
+lamedh_runtime = "0.3"
+futures = "0.3"
 
 [dependencies.tracing-subscriber]
 version = "0.2"
@@ -30,3 +32,7 @@ git = "https://github.com/softprops/dynomite.git"
 rev = "16c61ae635f0ea182709f64f1f47afa45e3561a8"
 default_features = false
 features = ["rustls"]
+
+[[bin]]
+name="alert-engine"
+path="src/alert_engine.rs"
