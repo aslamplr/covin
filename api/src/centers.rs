@@ -1,6 +1,6 @@
 use anyhow::Result;
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::env;
 use warp::Filter;
 
@@ -111,12 +111,12 @@ async fn get_all_centers_by_district(
         .await?)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CenterResponse {
     pub centers: Vec<Center>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Center {
     pub center_id: u32,
     pub name: String,
@@ -126,15 +126,15 @@ pub struct Center {
     pub pincode: u32,
     pub from: String,
     pub to: String,
-    pub lat: u32,
-    pub long: u32,
+    pub lat: f32,
+    pub long: f32,
     pub fee_type: String,
     pub sessions: Vec<Session>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Session {
-    pub session_id: String,
+    pub session_id: u32,
     pub available_capacity: f32,
     pub min_age_limit: u16,
     pub date: String,
