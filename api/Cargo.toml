@@ -24,6 +24,11 @@ validator = { version = "0.13", features = ["derive", "phone"] }
 lamedh_runtime = "0.3"
 futures = "0.3"
 chrono = "0.4"
+rusoto_ses = { version = "0.46", default_features = false }
+
+[dependencies.tera]
+version = "1"
+default-features = false
 
 [dependencies.tracing-subscriber]
 version = "0.2"

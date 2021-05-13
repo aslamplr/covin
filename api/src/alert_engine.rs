@@ -2,7 +2,7 @@ use anyhow::Error;
 use chrono::{Duration, FixedOffset, Utc};
 use covin_api::{
     alerts::Alert,
-    centers::{get_all_centers_by_district_json, Center, Session},
+    centers::{get_all_centers_by_district_json, Center},
 };
 use dynomite::{
     dynamodb::{DynamoDbClient, ScanError, ScanInput},
@@ -12,8 +12,10 @@ use dynomite::{
 use futures::{future, StreamExt, TryStreamExt};
 use lamedh_runtime::{handler_fn, run, Context, Error as LambdaError};
 use rusoto_core::RusotoError;
+use rusoto_ses::{SendTemplatedEmailError, SendTemplatedEmailRequest, Ses, SesClient};
 use serde_json::{json, Value};
 use std::{collections::HashMap, convert::TryFrom};
+use tera::{Context as TeraContext, Tera};
 use tracing_subscriber::fmt::format::FmtSpan;
 
 const HOUR: i32 = 3600;
@@ -41,6 +43,7 @@ async fn main() -> Result<(), LambdaError> {
     Ok(())
 }
 
+#[tracing::instrument]
 fn get_date_tomorrow() -> String {
     let ist_offset = FixedOffset::east(5 * HOUR + HOUR / 2);
     let ist_date_tomorrow = Utc::now() + ist_offset + Duration::days(1);
@@ -48,7 +51,95 @@ fn get_date_tomorrow() -> String {
 }
 
 #[tracing::instrument]
+fn get_tera_template() -> Result<Tera, tera::Error> {
+    let mut tera = Tera::default();
+    tera.add_raw_templates(vec![
+        ("container", r###"
+        {%- for center in centers -%}
+            {%- include "available_center" -%}
+        {%- endfor -%}
+        "###),
+        (
+            "available_center",
+            r###"
+<tr style="border-collapse:collapse">
+ <td align="left" style="Margin:0;padding-top:5px;padding-bottom:5px;padding-left:40px;padding-right:40px">
+  <table width="100%" cellspacing="0" cellpadding="0" style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:collapse;border-spacing:0px">
+   <tr style="border-collapse:collapse">
+    <td valign="top" align="center" style="padding:0;Margin:0;width:518px">
+     <table style="mso-table-lspace:0pt;mso-table-rspace:0pt;border-collapse:separate;border-spacing:0px;border-left:3px solid #6AA84F;border-right:1px solid #DDDDDD;border-top:1px solid #DDDDDD;border-bottom:1px solid #DDDDDD;background-color:#FFFFFF;border-top-left-radius:2px;border-top-right-radius:2px;border-bottom-right-radius:2px;border-bottom-left-radius:2px" width="100%" cellspacing="0" cellpadding="0" bgcolor="#ffffff" role="presentation">
+      <tr style="border-collapse:collapse">
+       <td style="padding:0;Margin:0;padding-top:5px;padding-bottom:5px;padding-left:5px">
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+         {{ center.name }}, {{ center.block_name }}, {{ center.district_name }}, {{ center.pincode }}
+        </p>
+       </td>
+      </tr>
+      <tr style="border-collapse:collapse">
+       <td style="padding:5px;Margin:0">
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Fee Type: {{ center.fee_type }}
+        </p>
+        {%- for session in center.sessions -%}
+        <hr />
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Date: {{ session.date }}
+        </p>
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Available Capacity: {{ session.available_capacity }}
+        </p>
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Min Age Limit: {{ session.min_age_limit }}
+        </p>
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Slots: {{ session.slots | join(sep = ", ") }}
+        </p>
+        {%- endfor -%}
+       </td>
+      </tr></table></td></tr></table></td></tr>"###,
+        ),
+    ])?;
+    Ok(tera)
+}
+
+#[tracing::instrument]
+fn generate_alert_content(
+    tera: &Tera,
+    centers_to_alert: &[&Center],
+) -> Result<String, tera::Error> {
+    let mut tera_context = TeraContext::new();
+    tera_context.insert("centers", &centers_to_alert);
+    let content = tera.render("container", &tera_context)?;
+    Ok(content)
+}
+
+#[tracing::instrument]
+async fn send_alert_email(
+    email: &str,
+    content: &str,
+) -> Result<(), RusotoError<SendTemplatedEmailError>> {
+    let client = SesClient::new(rusoto_core::Region::ApSouth1);
+
+    let _resp = client
+        .send_templated_email(SendTemplatedEmailRequest {
+            source: "Covin Alert <no-reply+covin-alert@email.covin.app>".to_string(),
+            template: "CovinAlert".to_string(),
+            destination: rusoto_ses::Destination {
+                to_addresses: Some(vec![email.to_string()]),
+                bcc_addresses: Some(vec!["covin.alert.no.reply@gmail.com".to_string()]),
+                ..Default::default()
+            },
+            template_data: json!({ "content": content }).to_string(),
+            ..Default::default()
+        })
+        .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
+    let tera = get_tera_template()?;
     let date_tomorrow = get_date_tomorrow();
     let alerts = get_all_alert_configs().await?;
     let grouped =
@@ -67,6 +158,7 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
         let res =
             get_all_centers_by_district_json(&format!("{}", district_id), &date_tomorrow, None)
                 .await;
+
         match res {
             Ok(res) => {
                 let centers = res.centers;
@@ -93,58 +185,31 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
                             email,
                             ..
                         } = alert;
-                        let centers_message = centers
-                        .iter()
-                        .map(|center_id| center_map.get(center_id))
-                        .filter(|center| {
-                            center
-                                .map(|center| {
-                                    center.sessions.len().ge(&1)
-                                        && center
-                                            .sessions
-                                            .iter()
-                                            .any(|session| 1_f32.le(&session.available_capacity))
-                                        && center
-                                            .sessions
-                                            .iter()
-                                            .any(|session| age.ge(&session.min_age_limit))
-                                })
-                                .unwrap_or(false)
-                        })
-                        .map(|center| center.unwrap())
-                        .map(|center| {
-                            let Center {
-                                name,
-                                block_name,
-                                district_name,
-                                pincode,
-                                fee_type,
-                                sessions,
-                                ..
-                            } = center;
-                            format!(
-                                "{}, {}, {}\nPin: {}\nFee Type: {}\n\nSessions:\n{}\n",
-                                name, block_name, district_name, pincode, fee_type, sessions.iter().map(|session: &Session| {
-                                    let Session {
-                                        date,
-                                        available_capacity,
-                                        min_age_limit,
-                                        slots,
-                                        ..
-                                    } = session;
-                                    format!("Date: {}\nAvailable Capacity: {}\nMinimum Age Limit: {}\nSlots: {}", date, available_capacity, min_age_limit, slots.join(", "))
-                                }).collect::<Vec<String>>().join("\n")
-                            )
-                        })
-                        .collect::<Vec<String>>().join("\n");
-                        if !centers_message.is_empty() {
-                            // Send email from here!
-                            println!(
-                                "Center Availability for user_id={} {}\n{}",
-                                user_id, email, centers_message
-                            );
+                        let centers_to_alert = centers
+                            .iter()
+                            .map(|center_id| center_map.get(center_id))
+                            .filter(|center| {
+                                center
+                                    .map(|center| {
+                                        center.sessions.len().ge(&1)
+                                            && center.sessions.iter().any(|session| {
+                                                1_f32.le(&session.available_capacity)
+                                            })
+                                            && center
+                                                .sessions
+                                                .iter()
+                                                .any(|session| age.ge(&session.min_age_limit))
+                                    })
+                                    .unwrap_or(false)
+                            })
+                            .map(|center| center.unwrap())
+                            .collect::<Vec<&Center>>();
+                        if !centers_to_alert.is_empty() {
+                            let content = generate_alert_content(&tera, &centers_to_alert)?;
+                            tracing::debug!(message = "Found centers for user", %user_id, %email, ?centers, ?centers_to_alert);
+                            send_alert_email(&email, &content).await?;
                         } else {
-                            tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers)
+                            tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers);
                         }
                     }
                 } else {
