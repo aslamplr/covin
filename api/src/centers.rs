@@ -134,7 +134,7 @@ pub struct Center {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Session {
-    pub session_id: u32,
+    pub session_id: String,
     pub available_capacity: f32,
     pub min_age_limit: u16,
     pub date: String,
