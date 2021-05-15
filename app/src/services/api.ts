@@ -120,13 +120,12 @@ export async function getCenters(districtId: number): Promise<CenterDim[]> {
 }
 
 export async function findCenters(
-  districtId: number = 296,
+  districtId: number,
   vaccine: VaccineType
 ): Promise<CenterResponse> {
   const vaccTypeQuery =
     vaccine === VaccineType.ANY ? "" : `&vaccine=${vaccine}`;
   const currentDate = new Date();
-  currentDate.setDate(currentDate.getDate() + 1);
   const date = `${padString(currentDate.getDate(), "0", 2)}-${padString(
     currentDate.getMonth() + 1,
     "0",
