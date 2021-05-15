@@ -1,5 +1,5 @@
 use anyhow::Error;
-use chrono::{Duration, FixedOffset, Utc};
+use chrono::{FixedOffset, Utc};
 use covin_api::{
     alerts::Alert,
     centers::{get_all_centers_by_district_json, Center},
@@ -44,9 +44,9 @@ async fn main() -> Result<(), LambdaError> {
 }
 
 #[tracing::instrument]
-fn get_date_tomorrow() -> String {
+fn get_date_today() -> String {
     let ist_offset = FixedOffset::east(5 * HOUR + HOUR / 2);
-    let ist_date_tomorrow = Utc::now() + ist_offset + Duration::days(1);
+    let ist_date_tomorrow = Utc::now() + ist_offset;
     ist_date_tomorrow.format("%d-%m-%Y").to_string()
 }
 
@@ -140,7 +140,7 @@ async fn send_alert_email(
 #[tracing::instrument]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
     let tera = get_tera_template()?;
-    let date_tomorrow = get_date_tomorrow();
+    let date_today = get_date_today();
     let alerts = get_all_alert_configs().await?;
     let grouped =
         alerts
@@ -156,8 +156,7 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
             });
     for (district_id, alerts) in grouped {
         let res =
-            get_all_centers_by_district_json(&format!("{}", district_id), &date_tomorrow, None)
-                .await;
+            get_all_centers_by_district_json(&format!("{}", district_id), &date_today, None).await;
 
         match res {
             Ok(res) => {
