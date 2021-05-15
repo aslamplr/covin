@@ -1,7 +1,7 @@
 use anyhow::Result;
 
 fn main() -> Result<()> {
-    let content = std::fs::read_to_string("./email_template/alert_sample.html")?;
+    let content = std::fs::read_to_string("./email_template/alert.html")?;
     let json = serde_json::json!({
         "Template": {
           "TemplateName": "CovinAlert",
