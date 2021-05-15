@@ -188,3 +188,34 @@ pub fn decode_auth_ctx(req_ctx: RequestContext) -> Result<AuthClaims, AuthError>
         }
     }
 }
+
+pub mod warp_filter {
+    use super::{decode_auth_ctx, decode_token, AuthClaims};
+    use warp::Filter;
+    use warp_lambda::lambda_http::request::RequestContext;
+
+    pub fn auth_claims(
+    ) -> impl Filter<Extract = (AuthClaims,), Error = warp::Rejection> + Clone + Send + Sync + 'static
+    {
+        let lambda_auth = warp::any()
+            .and(warp::filters::ext::get::<RequestContext>())
+            .and_then(|aws_req_context| async move {
+                tracing::debug!(message = "lambda request context");
+                decode_auth_ctx(aws_req_context).map_err(crate::problem::build)
+            });
+
+        let auth = warp::any()
+            .and(warp::header::<String>("authorization"))
+            .and_then(|token: String| async move {
+                tracing::debug!(message = "jwt token authentication");
+                decode_token(&token).await.map_err(crate::problem::build)
+            });
+
+        let auth = lambda_auth.or(auth).unify().map(|auth_claims| {
+            tracing::debug!(message = "auth claims intercept", claims = ?auth_claims);
+            auth_claims
+        });
+
+        auth
+    }
+}
