@@ -12,6 +12,7 @@ use dynomite::{
 use futures::{future, StreamExt, TryStreamExt};
 use lamedh_runtime::{handler_fn, run, Context, Error as LambdaError};
 use rusoto_core::RusotoError;
+use rusoto_s3::{GetObjectRequest, PutObjectError, PutObjectRequest, S3Client, S3};
 use rusoto_ses::{SendTemplatedEmailError, SendTemplatedEmailRequest, Ses, SesClient};
 use serde_json::{json, Value};
 use std::{collections::HashMap, convert::TryFrom};
@@ -19,6 +20,9 @@ use tera::{Context as TeraContext, Tera};
 use tracing_subscriber::fmt::format::FmtSpan;
 
 const HOUR: i32 = 3600;
+
+const EXCLUSION_MAP_S3_BUCKET: &str = "covin-transactions";
+const EXCLUSION_MAP_S3_KEY: &str = "exclusion_map.json";
 
 #[tokio::main]
 async fn main() -> Result<(), LambdaError> {
@@ -50,10 +54,54 @@ fn get_date_today() -> String {
     ist_date_tomorrow.format("%d-%m-%Y").to_string()
 }
 
-#[tracing::instrument]
-fn get_tera_template() -> Result<Tera, tera::Error> {
-    let mut tera = Tera::default();
-    tera.add_raw_templates(vec![
+struct EmailClient {
+    ses_client: SesClient,
+}
+
+impl EmailClient {
+    fn new() -> Self {
+        let ses_client = SesClient::new(rusoto_core::Region::ApSouth1);
+        Self { ses_client }
+    }
+
+    async fn send_alert_email(
+        &self,
+        email: &str,
+        content: &str,
+    ) -> Result<(), RusotoError<SendTemplatedEmailError>> {
+        let client = &self.ses_client;
+
+        let _resp = client
+            .send_templated_email(SendTemplatedEmailRequest {
+                source: "Covin Alert <no-reply+covin-alert@email.covin.app>".to_string(),
+                template: "CovinAlert".to_string(),
+                destination: rusoto_ses::Destination {
+                    to_addresses: Some(vec![email.to_string()]),
+                    bcc_addresses: Some(vec!["covin.alert.no.reply@gmail.com".to_string()]),
+                    ..Default::default()
+                },
+                template_data: json!({ "content": content }).to_string(),
+                ..Default::default()
+            })
+            .await?;
+
+        Ok(())
+    }
+}
+struct TemplateEngine {
+    tera: Tera,
+}
+
+impl TemplateEngine {
+    fn try_init() -> Result<Self, tera::Error> {
+        Ok(Self {
+            tera: Self::get_tera_template()?,
+        })
+    }
+
+    fn get_tera_template() -> Result<Tera, tera::Error> {
+        let mut tera = Tera::default();
+        tera.add_raw_templates(vec![
         ("container", r###"
         {%- for center in centers -%}
             {%- include "available_center" -%}
@@ -99,47 +147,86 @@ fn get_tera_template() -> Result<Tera, tera::Error> {
       </tr></table></td></tr></table></td></tr>"###,
         ),
     ])?;
-    Ok(tera)
+        Ok(tera)
+    }
+
+    fn generate_alert_content(&self, centers_to_alert: &[&Center]) -> Result<String, tera::Error> {
+        let mut tera_context = TeraContext::new();
+        tera_context.insert("centers", &centers_to_alert);
+        let content = self.tera.render("container", &tera_context)?;
+        Ok(content)
+    }
 }
 
-#[tracing::instrument]
-fn generate_alert_content(
-    tera: &Tera,
-    centers_to_alert: &[&Center],
-) -> Result<String, tera::Error> {
-    let mut tera_context = TeraContext::new();
-    tera_context.insert("centers", &centers_to_alert);
-    let content = tera.render("container", &tera_context)?;
-    Ok(content)
+struct ExclusionMap {
+    s3_client: S3Client,
+    exclusion_map: HashMap<String, Vec<u32>>,
 }
 
-#[tracing::instrument]
-async fn send_alert_email(
-    email: &str,
-    content: &str,
-) -> Result<(), RusotoError<SendTemplatedEmailError>> {
-    let client = SesClient::new(rusoto_core::Region::ApSouth1);
+impl ExclusionMap {
+    async fn init() -> Self {
+        let s3_client = S3Client::new(rusoto_core::Region::ApSouth1);
+        let exclusion_map = Self::init_exclusion_map(&s3_client).await;
+        Self {
+            s3_client,
+            exclusion_map,
+        }
+    }
 
-    let _resp = client
-        .send_templated_email(SendTemplatedEmailRequest {
-            source: "Covin Alert <no-reply+covin-alert@email.covin.app>".to_string(),
-            template: "CovinAlert".to_string(),
-            destination: rusoto_ses::Destination {
-                to_addresses: Some(vec![email.to_string()]),
-                bcc_addresses: Some(vec!["covin.alert.no.reply@gmail.com".to_string()]),
+    fn insert(&mut self, k: String, v: Vec<u32>) -> Option<Vec<u32>> {
+        self.exclusion_map.insert(k, v)
+    }
+
+    fn _get(&self, k: &str) -> Option<&Vec<u32>> {
+        self.exclusion_map.get(k)
+    }
+
+    async fn init_exclusion_map(s3_client: &S3Client) -> HashMap<String, Vec<u32>> {
+        if let Ok(resp) = s3_client
+            .get_object(GetObjectRequest {
+                bucket: EXCLUSION_MAP_S3_BUCKET.to_string(),
+                key: EXCLUSION_MAP_S3_KEY.to_string(),
                 ..Default::default()
-            },
-            template_data: json!({ "content": content }).to_string(),
-            ..Default::default()
-        })
-        .await?;
+            })
+            .await
+        {
+            if let Some(body) = resp.body {
+                let body = body
+                    .map_ok(|b| b.to_vec())
+                    .try_concat()
+                    .await
+                    .unwrap_or_default();
+                let value: HashMap<String, Vec<u32>> =
+                    serde_json::from_slice(&body).unwrap_or_default();
+                tracing::debug!(message = "exclusion map", ?value);
+                return value;
+            }
+        }
+        HashMap::<String, Vec<u32>>::new()
+    }
 
-    Ok(())
+    async fn store_exclusion_map(&self) -> Result<(), RusotoError<PutObjectError>> {
+        let s3_client = &self.s3_client;
+        let exclusion_map = &self.exclusion_map;
+        let json = serde_json::to_string(exclusion_map)?.as_bytes().to_vec();
+        let _resp = s3_client
+            .put_object(PutObjectRequest {
+                bucket: EXCLUSION_MAP_S3_BUCKET.to_string(),
+                key: EXCLUSION_MAP_S3_KEY.to_string(),
+                body: Some(json.into()),
+                content_type: Some("appliaction/json".to_string()),
+                ..Default::default()
+            })
+            .await?;
+        Ok(())
+    }
 }
 
 #[tracing::instrument]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
-    let tera = get_tera_template()?;
+    let mut exclusion_map = ExclusionMap::init().await;
+    let tera = TemplateEngine::try_init()?;
+    let ses_client = EmailClient::new();
     let date_today = get_date_today();
     let alerts = get_all_alert_configs().await?;
     let grouped =
@@ -204,9 +291,16 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
                             .map(|center| center.unwrap())
                             .collect::<Vec<&Center>>();
                         if !centers_to_alert.is_empty() {
-                            let content = generate_alert_content(&tera, &centers_to_alert)?;
+                            let content = tera.generate_alert_content(&centers_to_alert)?;
                             tracing::debug!(message = "Found centers for user", %user_id, %email, ?centers, ?centers_to_alert);
-                            send_alert_email(&email, &content).await?;
+                            ses_client.send_alert_email(&email, &content).await?;
+                            exclusion_map.insert(
+                                user_id,
+                                centers_to_alert
+                                    .into_iter()
+                                    .map(|center| center.center_id)
+                                    .collect(),
+                            );
                         } else {
                             tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers);
                         }
@@ -220,6 +314,7 @@ async fn func(_event: Value, _: Context) -> Result<Value, Error> {
             }
         }
     }
+    exclusion_map.store_exclusion_map().await?;
     Ok(json!({ "message": "Completed!", "status": "ok" }))
 }
 
