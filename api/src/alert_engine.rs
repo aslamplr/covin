@@ -48,6 +48,13 @@ async fn main() -> Result<(), LambdaError> {
 }
 
 #[tracing::instrument]
+async fn func(_event: Value, _: Context) -> Result<Value, Error> {
+    let mut alert_engine = AlertEngine::init().await?;
+    alert_engine.run().await?;
+    Ok(json!({ "message": "Completed!", "status": "ok" }))
+}
+
+#[tracing::instrument]
 fn get_date_today() -> String {
     let ist_offset = FixedOffset::east(5 * HOUR + HOUR / 2);
     let ist_date_tomorrow = Utc::now() + ist_offset;
@@ -222,100 +229,123 @@ impl ExclusionMap {
     }
 }
 
-#[tracing::instrument]
-async fn func(_event: Value, _: Context) -> Result<Value, Error> {
-    let mut exclusion_map = ExclusionMap::init().await;
-    let tera = TemplateEngine::try_init()?;
-    let ses_client = EmailClient::new();
-    let date_today = get_date_today();
-    let alerts = get_all_alert_configs().await?;
-    let grouped =
-        alerts
-            .into_iter()
-            .fold(HashMap::<u32, Vec<Alert>>::new(), |mut grouped, alert| {
-                let Alert { district_id, .. } = alert;
-                if let Some(vals) = grouped.get_mut(&district_id) {
-                    vals.push(alert);
-                } else {
-                    grouped.insert(district_id, vec![alert]);
-                }
-                grouped
-            });
-    for (district_id, alerts) in grouped {
-        let res =
-            get_all_centers_by_district_json(&format!("{}", district_id), &date_today, None).await;
+struct AlertEngine {
+    exclusion_map: ExclusionMap,
+    tera: TemplateEngine,
+    ses_client: EmailClient,
+}
 
-        match res {
-            Ok(res) => {
-                let centers = res.centers;
-                if !centers.is_empty() {
-                    let center_map = centers
-                        .into_iter()
-                        .filter(|center| {
-                            center
-                                .sessions
-                                .iter()
-                                .any(|session| session.available_capacity >= 1_f32)
-                        })
-                        .fold(HashMap::<u32, Center>::new(), |mut center_map, center| {
-                            let Center { center_id, .. } = center;
-                            center_map.insert(center_id, center);
-                            center_map
-                        });
+impl AlertEngine {
+    async fn init() -> Result<Self, Error> {
+        let exclusion_map = ExclusionMap::init().await;
+        let tera = TemplateEngine::try_init()?;
+        let ses_client = EmailClient::new();
+        Ok(Self {
+            exclusion_map,
+            tera,
+            ses_client,
+        })
+    }
 
-                    for alert in alerts {
-                        let Alert {
-                            user_id,
-                            centers,
-                            age,
-                            email,
-                            ..
-                        } = alert;
-                        let centers_to_alert = centers
-                            .iter()
-                            .map(|center_id| center_map.get(center_id))
+    async fn run(&mut self) -> Result<(), Error> {
+        let exclusion_map = &mut self.exclusion_map;
+        let tera = &self.tera;
+        let ses_client = &self.ses_client;
+
+        let date_today = get_date_today();
+        let alerts = get_all_alert_configs().await?;
+
+        let grouped =
+            alerts
+                .into_iter()
+                .fold(HashMap::<u32, Vec<Alert>>::new(), |mut grouped, alert| {
+                    let Alert { district_id, .. } = alert;
+                    if let Some(vals) = grouped.get_mut(&district_id) {
+                        vals.push(alert);
+                    } else {
+                        grouped.insert(district_id, vec![alert]);
+                    }
+                    grouped
+                });
+
+        for (district_id, alerts) in grouped {
+            let res =
+                get_all_centers_by_district_json(&format!("{}", district_id), &date_today, None)
+                    .await;
+
+            match res {
+                Ok(res) => {
+                    let centers = res.centers;
+                    if !centers.is_empty() {
+                        let center_map = centers
+                            .into_iter()
                             .filter(|center| {
                                 center
-                                    .map(|center| {
-                                        center.sessions.len().ge(&1)
-                                            && center.sessions.iter().any(|session| {
-                                                1_f32.le(&session.available_capacity)
-                                            })
-                                            && center
-                                                .sessions
-                                                .iter()
-                                                .any(|session| age.ge(&session.min_age_limit))
-                                    })
-                                    .unwrap_or(false)
+                                    .sessions
+                                    .iter()
+                                    .any(|session| session.available_capacity >= 1_f32)
                             })
-                            .map(|center| center.unwrap())
-                            .collect::<Vec<&Center>>();
-                        if !centers_to_alert.is_empty() {
-                            let content = tera.generate_alert_content(&centers_to_alert)?;
-                            tracing::debug!(message = "Found centers for user", %user_id, %email, ?centers, ?centers_to_alert);
-                            ses_client.send_alert_email(&email, &content).await?;
-                            exclusion_map.insert(
+                            .fold(HashMap::<u32, Center>::new(), |mut center_map, center| {
+                                let Center { center_id, .. } = center;
+                                center_map.insert(center_id, center);
+                                center_map
+                            });
+
+                        for alert in alerts {
+                            let Alert {
                                 user_id,
-                                centers_to_alert
-                                    .into_iter()
-                                    .map(|center| center.center_id)
-                                    .collect(),
-                            );
-                        } else {
-                            tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers);
+                                centers,
+                                age,
+                                email,
+                                ..
+                            } = alert;
+                            let centers_to_alert = centers
+                                .iter()
+                                .map(|center_id| center_map.get(center_id))
+                                .filter(|center| {
+                                    center
+                                        .map(|center| {
+                                            center.sessions.len().ge(&1)
+                                                && center.sessions.iter().any(|session| {
+                                                    1_f32.le(&session.available_capacity)
+                                                })
+                                                && center
+                                                    .sessions
+                                                    .iter()
+                                                    .any(|session| age.ge(&session.min_age_limit))
+                                        })
+                                        .unwrap_or(false)
+                                })
+                                .map(|center| center.unwrap())
+                                .collect::<Vec<&Center>>();
+                            if !centers_to_alert.is_empty() {
+                                let content = tera.generate_alert_content(&centers_to_alert)?;
+                                tracing::debug!(message = "Found centers for user", %user_id, %email, ?centers, ?centers_to_alert);
+                                ses_client.send_alert_email(&email, &content).await?;
+                                exclusion_map.insert(
+                                    user_id,
+                                    centers_to_alert
+                                        .into_iter()
+                                        .map(|center| center.center_id)
+                                        .collect(),
+                                );
+                            } else {
+                                tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers);
+                            }
                         }
+                    } else {
+                        tracing::debug!(message = "No centers found in district", %district_id);
                     }
-                } else {
-                    tracing::debug!(message = "No centers found in district", %district_id);
+                }
+                Err(err) => {
+                    tracing::error!(message = "An error occured while calling centers by district api", error = ?err);
                 }
             }
-            Err(err) => {
-                tracing::error!(message = "An error occured while calling centers by district api", error = ?err);
-            }
         }
+
+        exclusion_map.store_exclusion_map().await?;
+        Ok(())
     }
-    exclusion_map.store_exclusion_map().await?;
-    Ok(json!({ "message": "Completed!", "status": "ok" }))
 }
 
 #[derive(Debug, thiserror::Error)]
