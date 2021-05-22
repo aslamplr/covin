@@ -47,14 +47,14 @@ async fn main() -> Result<(), LambdaError> {
     Ok(())
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
     let mut alert_engine = AlertEngine::init().await?;
     alert_engine.run().await?;
     Ok(json!({ "message": "Completed!", "status": "ok" }))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 fn get_date_today() -> String {
     let ist_offset = FixedOffset::east(5 * HOUR + HOUR / 2);
     let ist_date_tomorrow = Utc::now() + ist_offset;
@@ -71,6 +71,7 @@ impl EmailClient {
         Self { ses_client }
     }
 
+    #[tracing::instrument(level = "debug", skip(self, content))]
     async fn send_alert_email(
         &self,
         email: &str,
@@ -157,6 +158,7 @@ impl TemplateEngine {
         Ok(tera)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     fn generate_alert_content(&self, centers_to_alert: &[&Center]) -> Result<String, tera::Error> {
         let mut tera_context = TeraContext::new();
         tera_context.insert("centers", &centers_to_alert);
@@ -190,6 +192,7 @@ impl ExclusionMap {
         self.exclusion_map.get(k)
     }
 
+    #[tracing::instrument(level = "debug", skip(s3_client))]
     async fn init_exclusion_map(s3_client: &S3Client) -> (HashMap<String, Vec<u32>>, usize) {
         if let Ok(resp) = s3_client
             .get_object(GetObjectRequest {
@@ -215,6 +218,7 @@ impl ExclusionMap {
         (HashMap::<String, Vec<u32>>::new(), 0)
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn store_exclusion_map(&self) -> Result<(), RusotoError<PutObjectError>> {
         let s3_client = &self.s3_client;
         let exclusion_map = &self.exclusion_map;
@@ -264,6 +268,7 @@ impl AlertEngine {
         })
     }
 
+    #[tracing::instrument(level = "debug", skip(self))]
     async fn run(&mut self) -> Result<(), Error> {
         let exclusion_map = &mut self.exclusion_map;
         let tera = &self.tera;
@@ -374,7 +379,7 @@ enum EngineError {
     DynomiteAttributeError(#[from] AttributeError),
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "debug")]
 async fn get_all_alert_configs() -> Result<Vec<Alert>, EngineError> {
     let retry_policy = Policy::Pause(3, std::time::Duration::from_millis(10));
     let client = DynamoDbClient::new(Default::default()).with_retries(retry_policy);
