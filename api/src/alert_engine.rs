@@ -2,7 +2,7 @@ use anyhow::Error;
 use chrono::{FixedOffset, Utc};
 use covin_api::{
     alerts::Alert,
-    centers::{get_all_centers_by_district_json, Center},
+    centers::{Center, FindCenters},
 };
 use dynomite::{
     dynamodb::{DynamoDbClient, ScanError, ScanInput},
@@ -247,6 +247,7 @@ struct AlertEngine {
     exclusion_map: ExclusionMap,
     tera: TemplateEngine,
     ses_client: EmailClient,
+    find_centers: FindCenters,
 }
 
 impl AlertEngine {
@@ -254,10 +255,12 @@ impl AlertEngine {
         let exclusion_map = ExclusionMap::init().await;
         let tera = TemplateEngine::try_init()?;
         let ses_client = EmailClient::new();
+        let find_centers = FindCenters::new();
         Ok(Self {
             exclusion_map,
             tera,
             ses_client,
+            find_centers,
         })
     }
 
@@ -265,6 +268,7 @@ impl AlertEngine {
         let exclusion_map = &mut self.exclusion_map;
         let tera = &self.tera;
         let ses_client = &self.ses_client;
+        let find_centers = &self.find_centers;
 
         let date_today = get_date_today();
         let alerts = get_all_alert_configs().await?;
@@ -283,9 +287,9 @@ impl AlertEngine {
                 });
 
         for (district_id, alerts) in grouped {
-            let res =
-                get_all_centers_by_district_json(&format!("{}", district_id), &date_today, None)
-                    .await;
+            let res = find_centers
+                .get_all_centers_by_district_json(&format!("{}", district_id), &date_today, None)
+                .await;
 
             match res {
                 Ok(res) => {

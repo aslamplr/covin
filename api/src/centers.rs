@@ -19,7 +19,9 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
                  date,
                  vaccine,
              }| async move {
-                let centers = get_all_centers_by_district(&district_id, &date, vaccine.as_deref())
+                let find_centers = FindCenters::new();
+                let centers = find_centers
+                    .get_all_centers_by_district(&district_id, &date, vaccine.as_deref())
                     .await
                     .map_err(problem::build)?;
                 tracing::info!(
@@ -40,75 +42,92 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
         .with(warp::trace::named("centers"))
 }
 
-async fn get_all_centers_by_district_base(
-    district_id: &str,
-    date: &str,
-    vaccine: Option<&str>,
-) -> Result<reqwest::Response> {
-    let query = {
-        let mut query = vec![("district_id", district_id), ("date", date)];
-        if vaccine.is_some() {
-            query.push(("vaccine", vaccine.unwrap()))
+pub struct FindCenters {
+    client: reqwest::Client,
+}
+
+impl FindCenters {
+    pub fn new() -> Self {
+        Self {
+            client: reqwest::Client::new(),
         }
-        query
-    };
-    let client = reqwest::Client::new();
-    let headers = {
-        let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::USER_AGENT,
-            CONFIG.user_agent_header.parse().unwrap(),
-        );
-        headers.insert(
-            reqwest::header::REFERER,
-            CONFIG.referer_header.parse().unwrap(),
-        );
-        headers.insert(
-            reqwest::header::ORIGIN,
-            CONFIG.origin_header.parse().unwrap(),
-        );
-        headers
-    };
+    }
 
-    Ok(client
-        .get(format!(
-            "{}/{}",
-            CONFIG.base_url, "v2/appointment/sessions/calendarByDistrict"
-        ))
-        .headers(headers)
-        .query(&query)
-        .send()
-        .await
-        .and_then(|resp| {
-            let status = resp.status();
-            if status.is_success() || status.is_redirection() {
-                Ok(resp)
-            } else {
-                resp.error_for_status()
+    async fn get_all_centers_by_district_base(
+        &self,
+        district_id: &str,
+        date: &str,
+        vaccine: Option<&str>,
+    ) -> Result<reqwest::Response> {
+        let client = &self.client;
+        let query = {
+            let mut query = vec![("district_id", district_id), ("date", date)];
+            if vaccine.is_some() {
+                query.push(("vaccine", vaccine.unwrap()))
             }
-        })?)
-}
+            query
+        };
+        let headers = {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                reqwest::header::USER_AGENT,
+                CONFIG.user_agent_header.parse().unwrap(),
+            );
+            headers.insert(
+                reqwest::header::REFERER,
+                CONFIG.referer_header.parse().unwrap(),
+            );
+            headers.insert(
+                reqwest::header::ORIGIN,
+                CONFIG.origin_header.parse().unwrap(),
+            );
+            headers
+        };
 
-pub async fn get_all_centers_by_district_json(
-    district_id: &str,
-    date: &str,
-    vaccine: Option<&str>,
-) -> Result<CenterResponse> {
-    Ok(get_all_centers_by_district_base(district_id, date, vaccine)
-        .await?
-        .json()
-        .await?)
-}
+        Ok(client
+            .get(format!(
+                "{}/{}",
+                CONFIG.base_url, "v2/appointment/sessions/calendarByDistrict"
+            ))
+            .headers(headers)
+            .query(&query)
+            .send()
+            .await
+            .and_then(|resp| {
+                let status = resp.status();
+                if status.is_success() || status.is_redirection() {
+                    Ok(resp)
+                } else {
+                    resp.error_for_status()
+                }
+            })?)
+    }
 
-async fn get_all_centers_by_district(
-    district_id: &str,
-    date: &str,
-    vaccine: Option<&str>,
-) -> Result<String> {
-    Ok(get_all_centers_by_district_base(district_id, date, vaccine)
-        .await?
-        .text()
-        .await?)
+    pub async fn get_all_centers_by_district_json(
+        &self,
+        district_id: &str,
+        date: &str,
+        vaccine: Option<&str>,
+    ) -> Result<CenterResponse> {
+        Ok(self
+            .get_all_centers_by_district_base(district_id, date, vaccine)
+            .await?
+            .json()
+            .await?)
+    }
+
+    async fn get_all_centers_by_district(
+        &self,
+        district_id: &str,
+        date: &str,
+        vaccine: Option<&str>,
+    ) -> Result<String> {
+        Ok(self
+            .get_all_centers_by_district_base(district_id, date, vaccine)
+            .await?
+            .text()
+            .await?)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
