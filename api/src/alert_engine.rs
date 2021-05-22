@@ -167,16 +167,18 @@ impl TemplateEngine {
 
 struct ExclusionMap {
     s3_client: S3Client,
+    initial_content_length: usize,
     exclusion_map: HashMap<String, Vec<u32>>,
 }
 
 impl ExclusionMap {
     async fn init() -> Self {
         let s3_client = S3Client::new(rusoto_core::Region::ApSouth1);
-        let exclusion_map = Self::init_exclusion_map(&s3_client).await;
+        let (exclusion_map, content_length) = Self::init_exclusion_map(&s3_client).await;
         Self {
             s3_client,
             exclusion_map,
+            initial_content_length: content_length,
         }
     }
 
@@ -188,7 +190,7 @@ impl ExclusionMap {
         self.exclusion_map.get(k)
     }
 
-    async fn init_exclusion_map(s3_client: &S3Client) -> HashMap<String, Vec<u32>> {
+    async fn init_exclusion_map(s3_client: &S3Client) -> (HashMap<String, Vec<u32>>, usize) {
         if let Ok(resp) = s3_client
             .get_object(GetObjectRequest {
                 bucket: EXCLUSION_MAP_S3_BUCKET.to_string(),
@@ -203,28 +205,40 @@ impl ExclusionMap {
                     .try_concat()
                     .await
                     .unwrap_or_default();
+                let content_length = body.len();
                 let value: HashMap<String, Vec<u32>> =
                     serde_json::from_slice(&body).unwrap_or_default();
                 tracing::debug!(message = "exclusion map", ?value);
-                return value;
+                return (value, content_length);
             }
         }
-        HashMap::<String, Vec<u32>>::new()
+        (HashMap::<String, Vec<u32>>::new(), 0)
     }
 
     async fn store_exclusion_map(&self) -> Result<(), RusotoError<PutObjectError>> {
         let s3_client = &self.s3_client;
         let exclusion_map = &self.exclusion_map;
+        let initial_content_length = self.initial_content_length;
         let json = serde_json::to_string(exclusion_map)?.as_bytes().to_vec();
-        let _resp = s3_client
-            .put_object(PutObjectRequest {
-                bucket: EXCLUSION_MAP_S3_BUCKET.to_string(),
-                key: EXCLUSION_MAP_S3_KEY.to_string(),
-                body: Some(json.into()),
-                content_type: Some("appliaction/json".to_string()),
-                ..Default::default()
-            })
-            .await?;
+        if initial_content_length != json.len() {
+            let _resp = s3_client
+                .put_object(PutObjectRequest {
+                    bucket: EXCLUSION_MAP_S3_BUCKET.to_string(),
+                    key: EXCLUSION_MAP_S3_KEY.to_string(),
+                    body: Some(json.into()),
+                    content_type: Some("appliaction/json".to_string()),
+                    ..Default::default()
+                })
+                .await?;
+            tracing::debug!(message = "Stored the exclusion_map")
+        } else {
+            tracing::debug!(
+                message = "No change in content_length, not storing the exclusion_map",
+                initial_content_length,
+                current_content_length = json.len(),
+                ?exclusion_map
+            );
+        }
         Ok(())
     }
 }
