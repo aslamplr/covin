@@ -27,7 +27,8 @@ const EXCLUSION_MAP_S3_KEY: &str = "exclusion_map.json";
 #[tokio::main]
 async fn main() -> Result<(), LambdaError> {
     let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
-    let is_lambda_env = std::env::var("AWS_LAMBDA_RUNTIME_API").map_or(false, |val| val.ne("true"));
+    // Naive check on env:AWS_LAMBDA_RUNTIME_API to have value to see if this is running inside a lambda function
+    let is_lambda_env = std::env::var("AWS_LAMBDA_RUNTIME_API").is_ok();
 
     let tracing_builder = tracing_subscriber::fmt()
         .with_env_filter(filter)

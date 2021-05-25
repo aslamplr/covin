@@ -14,7 +14,8 @@ async fn main() -> Result<()> {
     // Filter traces based on the RUST_LOG env var, or, if it's not set,
     // default to show the output of the example.
     let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_owned());
-    let is_lambda_env = std::env::var("AWS_LAMBDA_RUNTIME_API").map_or(false, |val| val.ne("true"));
+    // Naive check on env:AWS_LAMBDA_RUNTIME_API to have value to see if this is running inside a lambda function
+    let is_lambda_env = std::env::var("AWS_LAMBDA_RUNTIME_API").is_ok();
 
     let tracing_builder = tracing_subscriber::fmt()
         .with_env_filter(filter)
