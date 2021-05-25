@@ -2,6 +2,7 @@ import React from "react";
 import { Alert, CenterDim, District } from "../../services/api";
 import { useFormik } from "formik";
 import * as yup from "yup";
+import { useAuth } from "../auth/ProvideAuth";
 
 interface Props {
   alert?: Alert;
@@ -20,22 +21,45 @@ export default function AlertsEdit({
   onSubmit,
   onDistrictSelect,
 }: Props) {
+  const [, authUser] = useAuth();
+  const {
+    attributes: { email, phone_number },
+  } = authUser!;
   const formik = useFormik({
     initialValues: alert
       ? { ...alert, mobileNo: alert.mobileNo.substr(3, 10) }
       : {
-          districtId: 0,
+          districtId: "",
           centers: [],
-          email: "",
-          mobileNo: "",
+          email: email || "",
+          mobileNo: phone_number ? phone_number.substr(3, 10) : "",
           age: "",
         },
     validationSchema: yup.object({
-      districtId: yup.number().required(),
-      centers: yup.array().of(yup.number()).min(1).max(20).required(),
-      email: yup.string().email(),
-      mobileNo: yup.string().matches(/^[6-9]\d{9}$/),
-      age: yup.number().min(18).max(150),
+      districtId: yup
+        .number()
+        .typeError("Invalid value")
+        .required("Select a district"),
+      centers: yup
+        .array()
+        .typeError("Invalid value")
+        .of(yup.number().typeError("Invalid value"))
+        .min(1, "Select at least one center")
+        .max(20, "You may select only upto 20 centers")
+        .required("Select at least one center, and upto 20 centers"),
+      email: yup.string().email("Provide a valid email address"),
+      mobileNo: yup
+        .string()
+        .matches(/^[6-9]\d{9}$/, {
+          message: "Provide a valid indian mobile number",
+        }),
+      age: yup
+        .number()
+        .typeError("Invalid value, must be a number 😅 ")
+        .integer("Must be a value between 18 and 150 (no fractions)")
+        .min(18, "18 is the minumum age required")
+        .max(150, "Cannot add an age more than 150")
+        .required("Provide an age not less than 18"),
     }),
     onSubmit: (values) => {
       onSubmit({
@@ -87,7 +111,11 @@ export default function AlertsEdit({
                       value={formik.values.districtId}
                       className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     >
-                      {!alert && <option value={0}>Select District</option>}
+                      {!alert && (
+                        <option value="" disabled>
+                          Select District
+                        </option>
+                      )}
                       {districts.map(({ district_id, district_name }) => (
                         <option key={district_id} value={district_id}>
                           {district_name}
@@ -158,6 +186,7 @@ export default function AlertsEdit({
                       name="email"
                       id="email"
                       autoComplete="email"
+                      disabled
                       onChange={formik.handleChange}
                       value={formik.values.email}
                       className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
@@ -184,6 +213,7 @@ export default function AlertsEdit({
                         type="text"
                         name="mobileNo"
                         id="mobileNo"
+                        disabled
                         onChange={formik.handleChange}
                         value={formik.values.mobileNo}
                         className="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-none rounded-r-md sm:text-sm border-gray-300"

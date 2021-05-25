@@ -1,19 +1,30 @@
 import React, { createContext, useContext } from "react";
 import { AuthState, onAuthUIStateChange } from "@aws-amplify/ui-components";
 
-const authContext = createContext<[AuthState | undefined, object | undefined]>([
+interface AuthData {
+  attributes: {
+    email: string;
+    email_verified: boolean;
+    name: string;
+    phone_number: string;
+    phone_number_verified: boolean;
+    sub: string;
+  }
+}
+
+const authContext = createContext<[AuthState | undefined, AuthData | undefined]>([
   AuthState.Loading,
   undefined,
 ]);
 
 export function ProvideAuth({ children }: React.PropsWithChildren<{}>) {
   const [authState, setAuthState] = React.useState<AuthState>();
-  const [user, setUser] = React.useState<object | undefined>();
+  const [user, setUser] = React.useState<AuthData | undefined>();
 
   React.useEffect(() => {
     return onAuthUIStateChange((nextAuthState, authData) => {
       setAuthState(nextAuthState);
-      setUser(authData);
+      setUser(authData as AuthData);
     });
   }, []);
 
