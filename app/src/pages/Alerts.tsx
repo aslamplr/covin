@@ -8,6 +8,7 @@ import {
   getDistricts,
   createAlert as postAlert,
   District,
+  deleteAlert as removeAlert,
 } from "../services/api";
 import AlertEdit from "../components/alerts/AlertEdit";
 import AlertView from "../components/alerts/AlertView";
@@ -35,7 +36,7 @@ export default function Alerts() {
   };
 
   React.useEffect(() => {
-    initialize();    
+    initialize();
   }, []);
 
   const onDistrictSelect = (districtId: number) => {
@@ -48,7 +49,20 @@ export default function Alerts() {
     postAlert(alert).then(() => {
       initialize();
       setEditing(false);
-    })
+    });
+  };
+
+  const deleteAlert = () => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete the alert?\nPress 'OK' to delete the alert, 'Cancel' otherwise!"
+      )
+    ) {
+      removeAlert().then(() => {
+        initialize();
+        setEditing(false);
+      });
+    }
   };
 
   return (
@@ -67,6 +81,7 @@ export default function Alerts() {
               "Loading..."
             ) : alert && !isEdit ? (
               <AlertView
+                deleteAlert={() => deleteAlert()}
                 setEditing={() => setEditing(true)}
                 alert={alert}
                 districts={districts!}

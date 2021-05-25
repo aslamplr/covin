@@ -6,6 +6,7 @@ interface Props {
   districts: District[];
   centers: CenterDim[];
   setEditing: () => void;
+  deleteAlert: () => void;
 }
 
 export default function AlertView({
@@ -13,6 +14,7 @@ export default function AlertView({
   districts,
   centers,
   setEditing,
+  deleteAlert,
 }: Props) {
   const districtMap: { [key: number]: string } = districts.reduce(
     (previousVal, { district_id, district_name }) => {
@@ -43,6 +45,13 @@ export default function AlertView({
         <p className="mt-1 max-w-2xl text-sm text-gray-500">
           Currently alert configuration.
         </p>
+        <button
+          onClick={deleteAlert}
+          type="button"
+          className="absolute top-7 right-20 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+        >
+          Delete
+        </button>
         <button
           onClick={setEditing}
           type="button"
