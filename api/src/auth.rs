@@ -211,11 +211,9 @@ pub mod warp_filter {
                 decode_token(&token).await.map_err(crate::problem::build)
             });
 
-        let auth = lambda_auth.or(auth).unify().map(|auth_claims| {
+        lambda_auth.or(auth).unify().map(|auth_claims| {
             tracing::debug!(message = "auth claims intercept", claims = ?auth_claims);
             auth_claims
-        });
-
-        auth
+        })
     }
 }
