@@ -5,24 +5,28 @@ use std::convert::{TryFrom, TryInto};
 use thiserror::Error;
 use warp_lambda::lambda_http::request::RequestContext;
 
-static JWKS_URL: Lazy<JwksIssUrls> = Lazy::new(|| {
-    let region_str = std::env::var("AWS_COGNITO_REGION").unwrap();
-    let pool_id_str = std::env::var("AWS_COGNITO_POOL_ID").unwrap();
-    let jwks_url = format!(
-        "https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json",
-        region_str, pool_id_str
-    );
-    let iss = format!(
-        "https://cognito-idp.{}.amazonaws.com/{}",
-        region_str, pool_id_str
-    );
-    JwksIssUrls { jwks_url, iss }
-});
+static JWKS_URL: Lazy<JwksIssUrls> = Lazy::new(JwksIssUrls::init);
 static JWK_SET: OnceCell<JWKSet<Empty>> = OnceCell::new();
 
 struct JwksIssUrls {
     jwks_url: String,
     iss: String,
+}
+
+impl JwksIssUrls {
+    fn init() -> Self {
+        let region_str = std::env::var("AWS_COGNITO_REGION").unwrap();
+        let pool_id_str = std::env::var("AWS_COGNITO_POOL_ID").unwrap();
+        let jwks_url = format!(
+            "https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json",
+            region_str, pool_id_str
+        );
+        let iss = format!(
+            "https://cognito-idp.{}.amazonaws.com/{}",
+            region_str, pool_id_str
+        );
+        Self { jwks_url, iss }
+    }
 }
 
 async fn get_jwk_set<'t>() -> Result<&'t OnceCell<JWKSet<Empty>>, VerifierError> {
