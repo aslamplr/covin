@@ -22,10 +22,10 @@ mod service {
     use once_cell::sync::Lazy;
     use std::env;
 
-    static DISTRICTS_URL: Lazy<String> = Lazy::new(|| env::var("DISTRICTS_URL").unwrap());
+    static CONFIG: Lazy<DistrictConfig> = Lazy::new(DistrictConfig::init);
 
     pub async fn get_all_districts() -> Result<String> {
-        let districts = reqwest::get(&*DISTRICTS_URL)
+        let districts = reqwest::get(&CONFIG.districts_url)
             .await
             .and_then(|resp| {
                 let status = resp.status();
@@ -38,5 +38,17 @@ mod service {
             .text()
             .await?;
         Ok(districts)
+    }
+
+    #[derive(Debug)]
+    struct DistrictConfig {
+        pub districts_url: String,
+    }
+
+    impl DistrictConfig {
+        fn init() -> Self {
+            let districts_url = env::var("DISTRICTS_URL").unwrap();
+            Self { districts_url }
+        }
     }
 }

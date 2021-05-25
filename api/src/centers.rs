@@ -58,25 +58,6 @@ mod service {
 
     impl FindCenters {
         pub fn new() -> Self {
-            Self {
-                client: reqwest::Client::new(),
-            }
-        }
-
-        async fn get_all_centers_by_district_base(
-            &self,
-            district_id: &str,
-            date: &str,
-            vaccine: Option<&str>,
-        ) -> Result<reqwest::Response> {
-            let client = &self.client;
-            let query = {
-                let mut query = vec![("district_id", district_id), ("date", date)];
-                if vaccine.is_some() {
-                    query.push(("vaccine", vaccine.unwrap()))
-                }
-                query
-            };
             let headers = {
                 let mut headers = reqwest::header::HeaderMap::new();
                 headers.insert(
@@ -93,13 +74,32 @@ mod service {
                 );
                 headers
             };
+            let client = reqwest::ClientBuilder::new()
+                .default_headers(headers)
+                .build()
+                .unwrap_or_default();
+            Self { client }
+        }
 
+        async fn get_all_centers_by_district_base(
+            &self,
+            district_id: &str,
+            date: &str,
+            vaccine: Option<&str>,
+        ) -> Result<reqwest::Response> {
+            let client = &self.client;
+            let query = {
+                let mut query = vec![("district_id", district_id), ("date", date)];
+                if vaccine.is_some() {
+                    query.push(("vaccine", vaccine.unwrap()))
+                }
+                query
+            };
             Ok(client
                 .get(format!(
                     "{}/{}",
                     CONFIG.base_url, "v2/appointment/sessions/calendarByDistrict"
                 ))
-                .headers(headers)
                 .query(&query)
                 .send()
                 .await
