@@ -188,7 +188,7 @@ impl ExclusionMap {
         self.exclusion_map.insert(k, v)
     }
 
-    fn _get(&self, k: &str) -> Option<&Vec<u32>> {
+    fn get(&self, k: &str) -> Option<&Vec<u32>> {
         self.exclusion_map.get(k)
     }
 
@@ -322,8 +322,15 @@ impl AlertEngine {
                                 email,
                                 ..
                             } = alert;
+
+                            let exclude_centers = exclusion_map
+                                .get(&user_id)
+                                .map(|x| x.as_slice())
+                                .unwrap_or_default();
+
                             let centers_to_alert = centers
                                 .iter()
+                                .filter(|center_id| exclude_centers.contains(center_id))
                                 .map(|center_id| center_map.get(center_id))
                                 .filter(|center| {
                                     center
