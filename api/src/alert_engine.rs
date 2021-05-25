@@ -47,7 +47,7 @@ async fn main() -> Result<(), LambdaError> {
     Ok(())
 }
 
-#[tracing::instrument(level = "debug")]
+#[tracing::instrument(level = "debug", err)]
 async fn func(_event: Value, _: Context) -> Result<Value, Error> {
     let mut alert_engine = AlertEngine::init().await?;
     alert_engine.run().await?;
