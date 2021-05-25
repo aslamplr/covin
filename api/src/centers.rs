@@ -42,6 +42,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
         .with(warp::trace::named("centers"))
 }
 
+#[derive(Default)]
 pub struct FindCenters {
     client: reqwest::Client,
 }
@@ -103,6 +104,7 @@ impl FindCenters {
             })?)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_centers_by_district_json(
         &self,
         district_id: &str,
@@ -116,6 +118,7 @@ impl FindCenters {
             .await?)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_all_centers_by_district(
         &self,
         district_id: &str,
