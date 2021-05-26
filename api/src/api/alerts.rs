@@ -1,13 +1,13 @@
-pub use crate::alerts::service::{Alert, AlertError};
-use crate::{
+use crate::common::{
     auth::{warp_filter::auth_claims, AuthClaims},
     problem,
     validation::with_validated_json,
 };
+pub use service::{Alert, AlertError};
 use service::{AlertPayload, AlertService};
 use warp::Filter;
 
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let auth = auth_claims();
     let alert_service = AlertService::new();
     let alert_service = warp::any().map(move || alert_service.clone());

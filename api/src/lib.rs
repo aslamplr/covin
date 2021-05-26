@@ -1,6 +1,3 @@
-pub mod alerts;
-pub mod auth;
-pub mod centers;
-pub mod districts;
-pub mod problem;
-mod validation;
+pub mod api;
+pub mod common;
+pub mod covin;

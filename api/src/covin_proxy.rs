@@ -1,7 +1,10 @@
 use std::net::SocketAddrV4;
 
 use anyhow::Result;
-use covin_api::{alerts, centers, districts, problem};
+use covin_backend::{
+    common::problem,
+    covin::{centers, districts},
+};
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{
     self,
@@ -33,21 +36,17 @@ async fn main() -> Result<()> {
         .allow_any_origin()
         .build();
 
-    let routes = warp::path("api")
-        .and(
-            centers::routes()
-                .or(districts::routes())
-                .or(alerts::routes()),
-        )
+    let routes = warp::any()
+        .and(centers::routes().or(districts::routes()))
         .recover(problem::unpack)
         .with(warp::log("covin::proxy"))
         .with(cors)
         .with(warp::trace::request());
 
-    // To serve warp directly set env WARP_SOCK_ADDR=127.0.0.1:3030
+    // To serve warp directly set env WARP_SOCK_ADDR=127.0.0.1:3031
     if !is_lambda_env {
         let addr = std::env::var("WARP_SOCK_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:3030".to_string())
+            .unwrap_or_else(|_| "127.0.0.1:3031".to_string())
             .as_str()
             .parse::<SocketAddrV4>()?;
         warp::serve(routes).run(addr).await;

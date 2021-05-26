@@ -1,8 +1,8 @@
-use crate::problem;
+use crate::common::problem;
 use service::get_all_districts;
 use warp::Filter;
 
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path("districts")
         .and(warp::get())
         .and(warp::path::end())

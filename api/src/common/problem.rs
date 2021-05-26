@@ -3,8 +3,11 @@ use std::convert::Infallible;
 use warp::http;
 use warp::{Rejection, Reply};
 
-use crate::alerts::AlertError;
-use crate::auth::{AuthError, VerifierError};
+use crate::api::alerts::AlertError;
+use crate::common::{
+    auth::{AuthError, VerifierError},
+    validation,
+};
 
 pub fn build<E: Into<anyhow::Error>>(err: E) -> Rejection {
     warp::reject::custom(pack(err.into()))
@@ -102,7 +105,7 @@ pub async fn unpack(rejection: Rejection) -> Result<impl Reply, Infallible> {
             .title("Invalid Request Body.")
             .detail(format!("Request body is invalid. {}", e));
         reply_from_problem(&problem)
-    } else if let Some(errors) = rejection.find::<crate::validation::Error>() {
+    } else if let Some(errors) = rejection.find::<validation::Error>() {
         let problem = {
             let mut problem = Problem::with_title_and_type(http::StatusCode::BAD_REQUEST)
                 .title("One or more validation errors occurred")
