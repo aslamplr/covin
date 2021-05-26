@@ -1,7 +1,8 @@
 import { getAccessJwtToken } from "./auth";
 
 const SETU_BASE_URL = process.env.REACT_APP_SETU_BASE_URL;
-const BASE_URL = process.env.REACT_APP_API_BASE_URL;
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+const PROXY_BASE_URL = process.env.REACT_APP_PROXY_BASE_URL;
 const ALL_CENTERS_URL = process.env.REACT_APP_ALL_CENTERS_URL;
 const ALL_DISTRICTS_URL = process.env.REACT_APP_ALL_DISTRICTS_URL;
 
@@ -141,7 +142,7 @@ export async function findCenters(
     } catch (error) {
       console.warn(error);
       const resp = await publicFetch(
-        `${BASE_URL}/centers?district_id=${districtId}&date=${date}${vaccTypeQuery}`
+        `${PROXY_BASE_URL}/centers?district_id=${districtId}&date=${date}${vaccTypeQuery}`
       );
       const json = await resp.json();
       return json;
@@ -166,7 +167,7 @@ export async function getDistricts(): Promise<District[]> {
       return json.filter(({ state_id }) => state_id === 17);
     } catch (error) {
       console.warn(error);
-      const resp = await publicFetch(`${BASE_URL}/districts`);
+      const resp = await publicFetch(`${PROXY_BASE_URL}/districts`);
       const json: District[] = await resp.json();
       allDistricts = json;
       return json.filter(({ state_id }) => state_id === 17);
@@ -185,9 +186,9 @@ export interface Alert {
   age: number;
 }
 
-export async function getAlert(): Promise<Alert|undefined> {
+export async function getAlert(): Promise<Alert | undefined> {
   try {
-    const resp = await authFetch(`${BASE_URL}/alerts/register`);
+    const resp = await authFetch(`${API_BASE_URL}/alerts/register`);
     const json: Alert = await resp.json();
     return json;
   } catch (error) {
@@ -201,7 +202,7 @@ export async function getAlert(): Promise<Alert|undefined> {
 
 export async function createAlert(alert: Alert): Promise<void> {
   try {
-    await authFetch(`${BASE_URL}/alerts/register`, {
+    await authFetch(`${API_BASE_URL}/alerts/register`, {
       method: "POST",
       mode: "cors",
       headers: {
@@ -217,7 +218,7 @@ export async function createAlert(alert: Alert): Promise<void> {
 
 export async function deleteAlert(): Promise<void> {
   try {
-    await authFetch(`${BASE_URL}/alerts/register`, {
+    await authFetch(`${API_BASE_URL}/alerts/register`, {
       method: "DELETE",
       mode: "cors",
     });

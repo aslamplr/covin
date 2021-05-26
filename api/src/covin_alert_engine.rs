@@ -1,8 +1,8 @@
 use anyhow::Error;
 use chrono::{FixedOffset, Utc};
-use covin_api::{
-    alerts::Alert,
-    centers::{Center, FindCenters},
+use covin_backend::{
+    api::alerts::Alert,
+    covin::centers::{Center, FindCenters},
 };
 use dynomite::{
     dynamodb::{DynamoDbClient, ScanError, ScanInput},

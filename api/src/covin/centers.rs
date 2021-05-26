@@ -1,9 +1,9 @@
-use crate::problem;
+use crate::common::problem;
 use serde::Deserialize;
 pub use service::{Center, FindCenters};
 use warp::Filter;
 
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     warp::path("centers")
         .and(warp::get())
         .and(warp::path::end())

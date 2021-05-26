@@ -1,8 +1,21 @@
 [package]
-name = "covin-api"
+name = "covin-backend"
 version = "0.1.0"
 authors = ["Aslam Ahammed <aslamplr@gmail.com>"]
 edition = "2018"
+default-run="covin-api"
+
+[[bin]]
+name="covin-alert-engine"
+path="src/covin_alert_engine.rs"
+
+[[bin]]
+name="covin-api"
+path="src/covin_api.rs"
+
+[[bin]]
+name="covin-proxy"
+path="src/covin_proxy.rs"
 
 [dependencies]
 anyhow = "1.0"
@@ -41,7 +54,3 @@ git = "https://github.com/softprops/dynomite.git"
 rev = "16c61ae635f0ea182709f64f1f47afa45e3561a8"
 default_features = false
 features = ["rustls"]
-
-[[bin]]
-name="alert-engine"
-path="src/alert_engine.rs"
