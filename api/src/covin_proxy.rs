@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
         .allow_any_origin()
         .build();
 
-    let routes = warp::any()
+    let routes = warp::path("proxy")
         .and(centers::routes().or(districts::routes()))
         .recover(problem::unpack)
         .with(warp::log("covin::proxy"))
