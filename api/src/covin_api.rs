@@ -33,7 +33,7 @@ async fn main() -> Result<()> {
         .allow_any_origin()
         .build();
 
-    let routes = warp::any()
+    let routes = warp::path("api")
         .and(alerts::routes())
         .recover(problem::unpack)
         .with(warp::log("covin::api"))

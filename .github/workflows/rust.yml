@@ -33,10 +33,16 @@ jobs:
       - uses: actions/checkout@v2
       - name: AWS lambda::covinProxy build
         run: /usr/local/bin/build.sh
+        env:
+          BIN: covin-proxy
+      - name: AWS lambda::covinApi build
+        run: /usr/local/bin/build.sh
+        env:
+          BIN: covin-api
       - name: AWS lambda::convinAlertEngine build
         run: /usr/local/bin/build.sh
         env: 
-          BIN: alert-engine
+          BIN: covin-alert-engine
       - run: ls -l target/lambda/release
       - name: SAM build
         run: sam build

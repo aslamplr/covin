@@ -17,6 +17,12 @@ Resources:
       MemorySize: 128
       Timeout: 3
       Events:
+        # CorsApi:
+        #   Type: HttpApi
+        #   Properties:
+        #     ApiId: !Ref myCovinHttpApi
+        #     Path: /api/{proxy+}
+        #     Method: OPTIONS
         Api:
           Type: HttpApi
           Properties:
@@ -47,12 +53,21 @@ Resources:
       MemorySize: 128
       Timeout: 3
       Events:
+        # CorsApi:
+        #   Type: HttpApi
+        #   Properties:
+        #     ApiId: !Ref myCovinHttpApi
+        #     Path: /api/{proxy+}
+        #     Method: OPTIONS
         Api:
           Type: HttpApi
           Properties:
             ApiId: !Ref myCovinHttpApi
             Path: /api/{proxy+}
             Method: ANY
+            Auth:
+              Authorizer: CognitoIdp
+
       Environment:
         Variables:
           BASE_URL: https://cdn-api.co-vin.in/api
@@ -96,3 +111,21 @@ Resources:
 
   myCovinHttpApi:
     Type: AWS::Serverless::HttpApi
+    Properties:
+      Auth:
+        Authorizers:
+          CognitoIdp:
+            JwtConfiguration:
+              issuer: "https://cognito-idp.ap-south-1.amazonaws.com/ap-south-1_0DvxhDRsV"
+              audience:
+                - 68uau6menju7q3prl3t3gr1ksu
+            IdentitySource: "$request.header.Authorization"
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - content-type
+          - authorization
+        AllowMethods:
+          - "*"
+        MaxAge: 3600
