@@ -143,7 +143,13 @@ impl TemplateEngine {
             Date: {{ session.date }}
         </p>
         <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
-            Available Capacity: {{ session.available_capacity }}
+            Available Capacity (All): {{ session.available_capacity }}
+        </p>
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Available Capacity (Dose 1): {{ session.available_capacity_dose1 }}
+        </p>
+        <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
+            Available Capacity (Dose 2): {{ session.available_capacity_dose2 }}
         </p>
         <p style="Margin:0;-webkit-text-size-adjust:none;-ms-text-size-adjust:none;mso-line-height-rule:exactly;font-family:helvetica, 'helvetica neue', arial, verdana, sans-serif;line-height:23px;color:#555555;font-size:15px">
             Min Age Limit: {{ session.min_age_limit }}
@@ -189,7 +195,7 @@ impl ExclusionMap {
         self.exclusion_map.insert(k, v)
     }
 
-    fn get(&self, k: &str) -> Option<&Vec<u32>> {
+    fn _get(&self, k: &str) -> Option<&Vec<u32>> {
         self.exclusion_map.get(k)
     }
 
@@ -324,14 +330,18 @@ impl AlertEngine {
                                 ..
                             } = alert;
 
-                            let exclude_centers = exclusion_map
-                                .get(&user_id)
-                                .map(|x| x.as_slice())
-                                .unwrap_or_default();
+                            // TODO: @aslamplr, revert this when ready
+                            // let exclude_centers = exclusion_map
+                            //     .get(&user_id)
+                            //     .map(|x| x.as_slice())
+                            //     .unwrap_or_default();
+
+                            // Not respecting exlusion_map for now!!
+                            let exclude_centers = &[];
 
                             let centers_to_alert = centers
                                 .iter()
-                                .filter(|center_id| exclude_centers.contains(center_id))
+                                .filter(|center_id| !exclude_centers.contains(center_id))
                                 .map(|center_id| center_map.get(center_id))
                                 .filter(|center| {
                                     center

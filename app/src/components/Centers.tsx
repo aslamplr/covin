@@ -68,7 +68,13 @@ export default function Centers({ centers }: Props) {
                               {session.date}
                             </h3>
                             <div className="text-sm text-gray-800">
-                              Available Capacity: {session.available_capacity}
+                              Available Capacity (All): {session.available_capacity}
+                            </div>
+                            <div className="text-sm text-gray-800">
+                              Available Capacity (Dose 1): {session.available_capacity_dose1}
+                            </div>
+                            <div className="text-sm text-gray-800">
+                              Available Capacity (Dose 2): {session.available_capacity_dose2}
                             </div>
                             <div className="text-sm text-gray-800">
                               Minimum Age Requirement: {session.min_age_limit}

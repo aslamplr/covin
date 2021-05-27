@@ -170,6 +170,8 @@ mod service {
         pub min_age_limit: u16,
         pub date: String,
         pub slots: Vec<String>,
+        pub available_capacity_dose1: f32,
+        pub available_capacity_dose2: f32,
     }
 
     #[derive(Debug)]
