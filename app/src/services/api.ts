@@ -82,6 +82,8 @@ export interface Session {
   min_age_limit: number;
   date: string;
   slots: string[];
+  available_capacity_dose1: number;
+  available_capacity_dose2: number;
 }
 
 export interface CenterDim {
