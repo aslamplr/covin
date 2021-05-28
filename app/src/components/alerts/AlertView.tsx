@@ -73,7 +73,11 @@ export default function AlertView({
               Selected Centers
             </dt>
             <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              {alert.centers.map((centerId) => centerMap[centerId]).join("; ")}
+              {alert.centers
+                ? alert.centers
+                    .map((centerId) => centerMap[centerId])
+                    .join("; ")
+                : "Alert for availability in any centers in the selected district"}
             </dd>
           </div>
           <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -85,13 +89,19 @@ export default function AlertView({
           <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-gray-500">Mobile</dt>
             <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              {alert.mobileNo.substr(3, 10)}
+              {alert.mobileNo && alert.mobileNo.substr(3, 10)}
             </dd>
           </div>
           <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt className="text-sm font-medium text-gray-500">Age</dt>
             <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              {alert.age} years.
+              Alert for {alert.age ? `${alert.age} years.` : "any age"}
+            </dd>
+          </div>
+          <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt className="text-sm font-medium text-gray-500">Availability</dt>
+            <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              Alert for {alert.dose || "any"} dose
             </dd>
           </div>
         </dl>
