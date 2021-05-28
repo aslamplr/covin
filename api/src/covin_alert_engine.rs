@@ -1,7 +1,7 @@
 use anyhow::Error;
 use chrono::{FixedOffset, Utc};
 use covin_backend::{
-    api::alerts::Alert,
+    api::alerts::{AlertFilter, DoseFilter},
     covin::centers::{Center, FindCenters},
 };
 use dynomite::{
@@ -285,18 +285,18 @@ impl AlertEngine {
         let date_today = get_date_today();
         let alerts = get_all_alert_configs().await?;
 
-        let grouped =
-            alerts
-                .into_iter()
-                .fold(HashMap::<u32, Vec<Alert>>::new(), |mut grouped, alert| {
-                    let Alert { district_id, .. } = alert;
-                    if let Some(vals) = grouped.get_mut(&district_id) {
-                        vals.push(alert);
-                    } else {
-                        grouped.insert(district_id, vec![alert]);
-                    }
-                    grouped
-                });
+        let grouped = alerts.into_iter().fold(
+            HashMap::<u32, Vec<AlertFilter>>::new(),
+            |mut grouped, alert| {
+                let AlertFilter { district_id, .. } = alert;
+                if let Some(vals) = grouped.get_mut(&district_id) {
+                    vals.push(alert);
+                } else {
+                    grouped.insert(district_id, vec![alert]);
+                }
+                grouped
+            },
+        );
 
         for (district_id, alerts) in grouped {
             let res = find_centers
@@ -322,11 +322,12 @@ impl AlertEngine {
                             });
 
                         for alert in alerts {
-                            let Alert {
+                            let AlertFilter {
                                 user_id,
                                 centers,
                                 age,
                                 email,
+                                dose,
                                 ..
                             } = alert;
 
@@ -338,8 +339,13 @@ impl AlertEngine {
 
                             // Not respecting exlusion_map for now!!
                             let exclude_centers = &[];
-
-                            let centers_to_alert = centers
+                            let centers_to_check = centers
+                                .as_ref()
+                                .map(|centers| centers.iter().copied().collect::<Vec<u32>>())
+                                .unwrap_or_else(|| {
+                                    center_map.keys().into_iter().copied().collect::<Vec<u32>>()
+                                });
+                            let centers_to_alert = centers_to_check
                                 .iter()
                                 .filter(|center_id| !exclude_centers.contains(center_id))
                                 .map(|center_id| center_map.get(center_id))
@@ -347,13 +353,34 @@ impl AlertEngine {
                                     center
                                         .map(|center| {
                                             center.sessions.len().ge(&1)
-                                                && center.sessions.iter().any(|session| {
-                                                    1_f32.le(&session.available_capacity)
-                                                })
-                                                && center
-                                                    .sessions
-                                                    .iter()
-                                                    .any(|session| age.ge(&session.min_age_limit))
+                                                && match dose {
+                                                    DoseFilter::Any => {
+                                                        center.sessions.iter().any(|session| {
+                                                            1_f32.le(&session.available_capacity)
+                                                        })
+                                                    }
+                                                    DoseFilter::First => {
+                                                        center.sessions.iter().any(|session| {
+                                                            1_f32
+                                                                .le(&session
+                                                                    .available_capacity_dose1)
+                                                        })
+                                                    }
+                                                    DoseFilter::Second => {
+                                                        center.sessions.iter().any(|session| {
+                                                            1_f32
+                                                                .le(&session
+                                                                    .available_capacity_dose2)
+                                                        })
+                                                    }
+                                                }
+                                                && age
+                                                    .map(|age| {
+                                                        center.sessions.iter().any(|session| {
+                                                            age.ge(&session.min_age_limit)
+                                                        })
+                                                    })
+                                                    .unwrap_or(true)
                                         })
                                         .unwrap_or(false)
                                 })
@@ -398,7 +425,7 @@ enum EngineError {
 }
 
 #[tracing::instrument(level = "debug")]
-async fn get_all_alert_configs() -> Result<Vec<Alert>, EngineError> {
+async fn get_all_alert_configs() -> Result<Vec<AlertFilter>, EngineError> {
     let retry_policy = Policy::Pause(3, std::time::Duration::from_millis(10));
     let client = DynamoDbClient::new(Default::default()).with_retries(retry_policy);
 
@@ -408,10 +435,10 @@ async fn get_all_alert_configs() -> Result<Vec<Alert>, EngineError> {
             limit: Some(100),
             ..Default::default()
         })
-        .map(|item| item.map(|attrs| Alert::try_from(attrs).map_err(EngineError::from)))
+        .map(|item| item.map(|attrs| AlertFilter::try_from(attrs).map_err(EngineError::from)))
         .filter(|item| future::ready(item.is_ok()))
         .try_collect::<Vec<Result<_, _>>>()
         .await?
         .into_iter()
-        .collect::<Result<Vec<Alert>, _>>()
+        .collect::<Result<Vec<AlertFilter>, _>>()
 }

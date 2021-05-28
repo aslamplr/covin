@@ -27,48 +27,76 @@ export default function AlertsEdit({
   } = authUser!;
   const formik = useFormik({
     initialValues: alert
-      ? { ...alert, mobileNo: alert.mobileNo.substr(3, 10) }
+      ? {
+          ...alert,
+          mobileNo: alert.mobileNo ? alert.mobileNo.substr(3, 10) : "",
+          anyCenters: !alert.centers,
+          centers: alert.centers ? alert.centers : "",
+          age: alert.age ? alert.age : "",
+        }
       : {
           districtId: "",
           centers: [],
+          anyCenters: false,
+          centersTemp: [],
           email: email || "",
           mobileNo: phone_number ? phone_number.substr(3, 10) : "",
           age: "",
+          dose: "",
         },
     validationSchema: yup.object({
       districtId: yup
         .number()
         .typeError("Invalid value")
         .required("Select a district"),
-      centers: yup
-        .array()
-        .typeError("Invalid value")
-        .of(yup.number().typeError("Invalid value"))
-        .min(1, "Select at least one center")
-        .max(20, "You may select only upto 20 centers")
-        .required("Select at least one center, and upto 20 centers"),
+      anyCenters: yup.boolean(),
+      centers: yup.mixed().when("anyCenters", {
+        is: (val: boolean) => !val,
+        then: yup
+          .array()
+          .typeError("Invalid value")
+          .of(yup.number().typeError("Invalid value"))
+          .min(1, "Select at least one center")
+          .max(20, "You may select only upto 20 centers")
+          .required("Select at least one center, and upto 20 centers"),
+      }),
       email: yup.string().email("Provide a valid email address"),
-      mobileNo: yup
-        .string()
-        .matches(/^[6-9]\d{9}$/, {
-          message: "Provide a valid indian mobile number",
-        }),
+      mobileNo: yup.string().matches(/^[6-9]\d{9}$/, {
+        message: "Provide a valid indian mobile number",
+      }),
       age: yup
         .number()
-        .typeError("Invalid value, must be a number 😅 ")
-        .integer("Must be a value between 18 and 150 (no fractions)")
+        .typeError(
+          "Invalid age, must be a number 😅 or leave blank to alert for any age"
+        )
+        .integer("Must be between 18 and 150 (no fractions)")
         .min(18, "18 is the minumum age required")
-        .max(150, "Cannot add an age more than 150")
-        .required("Provide an age not less than 18"),
+        .max(150, "Cannot add an age more than 150"),
+      dose: yup
+        .string()
+        .oneOf(["any", "first", "second"])
+        .required("Select a dose availability filter"),
     }),
     onSubmit: (values) => {
-      onSubmit({
+      let alertPayload: Alert = {
         districtId: Number(values.districtId),
-        centers: values.centers.map(Number),
         email: values.email,
-        mobileNo: `+91${values.mobileNo}`,
-        age: Number(values.age),
-      });
+        dose: values.dose,
+      };
+
+      if (values.centers && values.centers instanceof Array) {
+        alertPayload.centers = values.centers.map(Number);
+      }
+
+      if (values.age) {
+        alertPayload.age = Number(values.age);
+      }
+
+      if (values.mobileNo) {
+        alertPayload.mobileNo = `+91${values.mobileNo}`;
+      }
+
+      onSubmit(alertPayload);
     },
   });
 
@@ -86,6 +114,26 @@ export default function AlertsEdit({
     event: React.ChangeEvent<HTMLSelectElement>
   ) => {
     onDistrictSelect(parseInt(event.target.value));
+    formik.handleChange(event);
+  };
+
+  const onAnyCentersValueChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    if (event.target.checked) {
+      if (formik.values.centers instanceof Array) {
+        formik.setFieldValue("centersTemp", [...(formik.values.centers || [])]);
+      }
+      formik.setFieldValue("centers", "");
+    } else {
+      if (
+        formik.values.centersTemp instanceof Array &&
+        formik.values.centersTemp
+      ) {
+        formik.setFieldValue("centers", [...(formik.values.centersTemp || [])]);
+      }
+      formik.setFieldValue("centersTemp", []);
+    }
     formik.handleChange(event);
   };
 
@@ -141,20 +189,47 @@ export default function AlertsEdit({
                       centers).
                     </p>
                     <p className="m-2">
-                      {formik.values.centers.map((centerId: number) => (
-                        <span
-                          key={centerId}
-                          className="text-gray-100 m-1 p-1 bg-purple-400 text-sm border rounded-md border-gray-400"
-                        >
-                          {centerMap[centerId]}
+                      {formik.values.centers &&
+                      formik.values.centers instanceof Array ? (
+                        formik.values.centers.map((centerId: number) => (
+                          <span
+                            key={centerId}
+                            className="text-gray-100 m-1 p-1 bg-purple-400 text-sm border rounded-md border-gray-400"
+                          >
+                            {centerMap[centerId]}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-gray-700 m-1 p-1 text-sm border rounded-md border-gray-400">
+                          Alert set for availability in any centers in the
+                          selected district
                         </span>
-                      ))}
+                      )}
+                    </p>
+                    <p>
+                      <label
+                        htmlFor="anyCenters"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        <input
+                          type="checkbox"
+                          name="anyCenters"
+                          id="anyCenters"
+                          onChange={onAnyCentersValueChange}
+                          checked={formik.values.anyCenters}
+                          className="rounded-md"
+                        ></input>
+                        <span className="text-gray-700 m-1 p-1">
+                          Any centers in selected district
+                        </span>
+                      </label>
                     </p>
                     <div className="mt-1 flex rounded-md shadow-sm">
                       <select
                         id="centers"
                         name="centers"
                         onChange={formik.handleChange}
+                        disabled={formik.values.anyCenters}
                         value={formik.values.centers as unknown as string[]}
                         className="form-multiselect shadow-sm focus:ring-indigo-500 focus:border-indigo-500 mt-1 block w-full sm:text-sm border-gray-300 rounded-md"
                         multiple
@@ -245,6 +320,41 @@ export default function AlertsEdit({
                     {formik.touched.age && formik.errors.age ? (
                       <div className="text-red-700 text-sm m-2 p-2">
                         {formik.errors.age}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="col-span-6 sm:col-span-3">
+                    <label
+                      htmlFor="dose"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Availability Check
+                    </label>
+                    <select
+                      id="dose"
+                      name="dose"
+                      onChange={formik.handleChange}
+                      value={formik.values.dose}
+                      className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    >
+                      {!alert && (
+                        <option value="" disabled>
+                          Select Availability Filter
+                        </option>
+                      )}
+                      <option value="any">
+                        Alert when any dose availability in a center
+                      </option>
+                      <option value="first">
+                        Alert when first dose (1st) availability in a center
+                      </option>
+                      <option value="second">
+                        Alert when second dose (2nd) availability in a center
+                      </option>
+                    </select>
+                    {formik.touched.dose && formik.errors.dose ? (
+                      <div className="text-red-700 text-sm m-2 p-2">
+                        {formik.errors.dose}
                       </div>
                     ) : null}
                   </div>

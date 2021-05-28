@@ -181,11 +181,12 @@ export async function getDistricts(): Promise<District[]> {
 }
 
 export interface Alert {
-  centers: number[];
+  centers?: number[];
   districtId: number;
   email: string;
-  mobileNo: string;
-  age: number;
+  mobileNo?: string;
+  age?: number;
+  dose?: string;
 }
 
 export async function getAlert(): Promise<Alert | undefined> {
