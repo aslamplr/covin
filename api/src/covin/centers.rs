@@ -98,7 +98,7 @@ mod service {
             Ok(client
                 .get(format!(
                     "{}/{}",
-                    CONFIG.base_url, "v2/appointment/sessions/public/calendarByDistrict"
+                    CONFIG.base_url, "v2/appointment/sessions/calendarByDistrict"
                 ))
                 .query(&query)
                 .send()
