@@ -137,7 +137,7 @@ export async function findCenters(
   try {
     try {
       const resp = await publicFetch(
-        `${SETU_BASE_URL}/v2/appointment/sessions/calendarByDistrict?district_id=${districtId}&date=${date}${vaccTypeQuery}`
+        `${SETU_BASE_URL}/v2/appointment/sessions/public/calendarByDistrict?district_id=${districtId}&date=${date}${vaccTypeQuery}`
       );
       const json = await resp.json();
       return json;
