@@ -3,8 +3,8 @@ use crate::common::{
     problem,
     validation::with_validated_json,
 };
-pub use service::{AlertError, AlertFilter, DoseFilter};
-use service::{AlertPayload, AlertService};
+use service::AlertPayload;
+pub use service::{AlertError, AlertFilter, AlertService, DoseFilter, GetAlertsError};
 use warp::Filter;
 
 pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
@@ -65,15 +65,18 @@ fn build_err<E: Into<AlertError>>(err: E) -> warp::Rejection {
 }
 
 mod service {
+    use std::convert::TryFrom;
+
     use dynomite::{
         attr_map,
         dynamodb::{
             DeleteItemError, DeleteItemInput, DynamoDb, DynamoDbClient, GetItemError, GetItemInput,
-            PutItemError, PutItemInput,
+            PutItemError, PutItemInput, ScanError, ScanInput,
         },
         retry::{Policy, RetryingDynamoDb},
-        Attribute, AttributeError, FromAttributes as _, Item, Retries,
+        Attribute, AttributeError, DynamoDbExt, FromAttributes as _, Item, Retries,
     };
+    use futures::{future, StreamExt, TryStreamExt};
     use rusoto_core::RusotoError;
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
@@ -149,6 +152,34 @@ mod service {
 
             Ok(())
         }
+
+        #[tracing::instrument(skip(self), level = "debug")]
+        pub async fn get_all_alert_configs(self) -> Result<Vec<AlertFilter>, GetAlertsError> {
+            let dynamo_db = self.dynamodb_client;
+
+            dynamo_db
+                .scan_pages(ScanInput {
+                    table_name: "CovinAlerts".to_string(),
+                    limit: Some(100),
+                    ..Default::default()
+                })
+                .map(|item| {
+                    item.map(|attrs| AlertFilter::try_from(attrs).map_err(GetAlertsError::from))
+                })
+                .filter(|item| future::ready(item.is_ok()))
+                .try_collect::<Vec<Result<_, _>>>()
+                .await?
+                .into_iter()
+                .collect::<Result<Vec<AlertFilter>, _>>()
+        }
+    }
+
+    #[derive(Debug, Error)]
+    pub enum GetAlertsError {
+        #[error("Rusoto Scan Error")]
+        RusotoScanError(#[from] RusotoError<ScanError>),
+        #[error("Dynomite Attrute Error")]
+        DynomiteAttributeError(#[from] AttributeError),
     }
 
     #[derive(Debug, Error)]

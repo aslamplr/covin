@@ -36,10 +36,7 @@ async fn get_jwk_set<'t>() -> Result<&'t OnceCell<JWKSet<Empty>>, VerifierError>
             .json::<JWKSet<Empty>>()
             .await?;
 
-        #[allow(unused_must_use)]
-        {
-            JWK_SET.set(jwk_set);
-        }
+        let _ = JWK_SET.set(jwk_set);
     }
 
     Ok(&JWK_SET)
