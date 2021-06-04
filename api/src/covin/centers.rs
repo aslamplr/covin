@@ -1,6 +1,6 @@
 use crate::common::problem;
 use serde::Deserialize;
-pub use service::{Center, FindCenters};
+pub use service::{Center, CenterResponse, CovinFindCenters, FindCenters, Session};
 use warp::Filter;
 
 pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
@@ -14,7 +14,7 @@ pub fn routes() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Reje
                  date,
                  vaccine,
              }| async move {
-                let find_centers = FindCenters::new();
+                let find_centers = CovinFindCenters::new();
                 let centers = find_centers
                     .get_all_centers_by_district(&district_id, &date, vaccine.as_deref())
                     .await
@@ -44,19 +44,48 @@ struct CenterQueryParams {
     pub vaccine: Option<String>,
 }
 mod service {
-    use anyhow::Result;
+    use std::env;
+
+    use async_trait::async_trait;
     use once_cell::sync::Lazy;
     use serde::{Deserialize, Serialize};
-    use std::env;
+    use thiserror::Error;
 
     static CONFIG: Lazy<CentersConfig> = Lazy::new(CentersConfig::init);
 
+    #[derive(Debug, Error)]
+    pub enum FindCentersError {
+        #[error("Request failed")]
+        RequestFail(#[from] reqwest::Error),
+        #[error("JSON deserialization failed")]
+        JsonDeserializeFail(#[from] serde_json::Error),
+    }
+
+    #[async_trait]
+    pub trait FindCenters {
+        type Error: std::error::Error + Sync + Send + 'static;
+
+        async fn get_all_centers_by_district(
+            &self,
+            district_id: &str,
+            date: &str,
+            vaccine: Option<&str>,
+        ) -> std::result::Result<String, Self::Error>;
+
+        async fn get_all_centers_by_district_json(
+            &self,
+            district_id: &str,
+            date: &str,
+            vaccine: Option<&str>,
+        ) -> std::result::Result<CenterResponse, Self::Error>;
+    }
+
     #[derive(Default)]
-    pub struct FindCenters {
+    pub struct CovinFindCenters {
         client: reqwest::Client,
     }
 
-    impl FindCenters {
+    impl CovinFindCenters {
         pub fn new() -> Self {
             let headers = {
                 let mut headers = reqwest::header::HeaderMap::new();
@@ -86,7 +115,7 @@ mod service {
             district_id: &str,
             date: &str,
             vaccine: Option<&str>,
-        ) -> Result<reqwest::Response> {
+        ) -> std::result::Result<reqwest::Response, FindCentersError> {
             let client = &self.client;
             let query = {
                 let mut query = vec![("district_id", district_id), ("date", date)];
@@ -112,14 +141,19 @@ mod service {
                     }
                 })?)
         }
+    }
+
+    #[async_trait]
+    impl FindCenters for CovinFindCenters {
+        type Error = FindCentersError;
 
         #[tracing::instrument(skip(self))]
-        pub async fn get_all_centers_by_district_json(
+        async fn get_all_centers_by_district_json(
             &self,
             district_id: &str,
             date: &str,
             vaccine: Option<&str>,
-        ) -> Result<CenterResponse> {
+        ) -> std::result::Result<CenterResponse, Self::Error> {
             Ok(self
                 .get_all_centers_by_district_base(district_id, date, vaccine)
                 .await?
@@ -128,12 +162,12 @@ mod service {
         }
 
         #[tracing::instrument(skip(self))]
-        pub async fn get_all_centers_by_district(
+        async fn get_all_centers_by_district(
             &self,
             district_id: &str,
             date: &str,
             vaccine: Option<&str>,
-        ) -> Result<String> {
+        ) -> std::result::Result<String, Self::Error> {
             Ok(self
                 .get_all_centers_by_district_base(district_id, date, vaccine)
                 .await?
@@ -147,7 +181,7 @@ mod service {
         pub centers: Vec<Center>,
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize, Serialize, Default)]
     pub struct Center {
         pub center_id: u32,
         pub name: String,
@@ -163,7 +197,7 @@ mod service {
         pub sessions: Vec<Session>,
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize, Serialize, Default)]
     pub struct Session {
         pub session_id: String,
         pub available_capacity: f32,

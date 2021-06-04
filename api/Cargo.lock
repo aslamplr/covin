@@ -288,6 +288,7 @@ name = "covin-backend"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "biscuit",
  "chrono",
  "dynomite",
