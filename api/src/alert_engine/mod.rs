@@ -138,45 +138,44 @@ where
                                         .map(|center| center.sessions.len().ge(&1))
                                         .unwrap_or(false)
                                 })
-                                .map(|center| {
-                                    center.map(|center| {
-                                        center
-                                            .sessions
-                                            .iter()
-                                            .map(|session| AlertSession::from((session, center)))
-                                            // Filter dose availability
-                                            .filter(|alert_session| match dose {
-                                                DoseFilter::Any => 1_f32
-                                                    .le(&alert_session.session.available_capacity),
-                                                DoseFilter::First => 1_f32.le(&alert_session
-                                                    .session
-                                                    .available_capacity_dose1),
-                                                DoseFilter::Second => 1_f32.le(&alert_session
-                                                    .session
-                                                    .available_capacity_dose2),
-                                            })
-                                            // Filter age requirement
-                                            .filter(|alert_session| {
-                                                age.map(|age| {
-                                                    age.ge(&alert_session.session.min_age_limit)
-                                                })
-                                                .unwrap_or(true)
-                                            })
-                                            // Filter if same alert has been sent already
-                                            .filter(|alert_session| {
-                                                let AlertSession { session, .. } = alert_session;
-                                                exclusion_map.any_variance(
-                                                    &user_id,
-                                                    &session.session_id,
-                                                    session.available_capacity,
-                                                )
-                                            })
-                                            .collect::<Vec<_>>()
-                                    })
-                                })
                                 // We can safely call `.unwrap()` here since all the sessions that will reach here
                                 // should have `Some(..)` in it, so safe to `.unwrap()` at this point.
-                                .map(|sessions| sessions.unwrap())
+                                .map(|center| center.unwrap())
+                                .map(|center| {
+                                    center
+                                        .sessions
+                                        .iter()
+                                        .map(|session| AlertSession::from((session, center)))
+                                        // Filter dose availability
+                                        .filter(|alert_session| match dose {
+                                            DoseFilter::Any => {
+                                                1_f32.le(&alert_session.session.available_capacity)
+                                            }
+                                            DoseFilter::First => 1_f32.le(&alert_session
+                                                .session
+                                                .available_capacity_dose1),
+                                            DoseFilter::Second => 1_f32.le(&alert_session
+                                                .session
+                                                .available_capacity_dose2),
+                                        })
+                                        // Filter age requirement
+                                        .filter(|alert_session| {
+                                            age.map(|age| {
+                                                age.ge(&alert_session.session.min_age_limit)
+                                            })
+                                            .unwrap_or(true)
+                                        })
+                                        // Filter if same alert has been sent already
+                                        .filter(|alert_session| {
+                                            let AlertSession { session, .. } = alert_session;
+                                            exclusion_map.any_variance(
+                                                &user_id,
+                                                &session.session_id,
+                                                session.available_capacity,
+                                            )
+                                        })
+                                        .collect::<Vec<_>>()
+                                })
                                 .flatten()
                                 .collect::<Vec<AlertSession>>();
                             if !sessions_to_alert.is_empty() {
