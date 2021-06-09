@@ -31,18 +31,11 @@ jobs:
         - /home/github/.cargo/git:/root/.cargo/git 
     steps:
       - uses: actions/checkout@v2
-      - name: AWS lambda::covinProxy build
+      - name: AWS lambda build
         run: /usr/local/bin/build.sh
         env:
-          BIN: covin-proxy
-      - name: AWS lambda::covinApi build
-        run: /usr/local/bin/build.sh
-        env:
-          BIN: covin-api
-      - name: AWS lambda::convinAlertEngine build
-        run: /usr/local/bin/build.sh
-        env: 
-          BIN: covin-alert-engine
+          - PROFILE: release
+          - PACKAGE: false
       - run: ls -l target/lambda/release
       - name: SAM build
         run: sam build
