@@ -34,8 +34,8 @@ jobs:
       - name: AWS lambda build
         run: /usr/local/bin/build.sh
         env:
-          - PROFILE: release
-          - PACKAGE: false
+         PROFILE: "release"
+         PACKAGE: "false"
       - run: ls -l target/lambda/release
       - name: SAM build
         run: sam build
