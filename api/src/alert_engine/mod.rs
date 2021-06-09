@@ -31,7 +31,7 @@ where
     GaFn: Fn() -> GaFnFut,
     GaFnFut: futures::Future<Output = Result<Vec<AlertFilter>, GetAlertsError>>,
     Fc: FindCenters,
-    Em: ExclusionMap<Key = String, Value = Vec<u32>>,
+    Em: ExclusionMap,
     Ec: EmailClient,
     Te: TemplateEngine,
 {
@@ -47,7 +47,7 @@ where
     GaFn: Fn() -> GaFnFut,
     GaFnFut: futures::Future<Output = Result<Vec<AlertFilter>, GetAlertsError>>,
     Fc: FindCenters,
-    Em: ExclusionMap<Key = String, Value = Vec<u32>>,
+    Em: ExclusionMap,
     Ec: EmailClient,
     Te: TemplateEngine,
 {
@@ -124,14 +124,6 @@ where
                                 ..
                             } = alert;
 
-                            // TODO: @aslamplr, revert this when ready
-                            // let exclude_centers = exclusion_map
-                            //     .get(&user_id)
-                            //     .map(|x| x.as_slice())
-                            //     .unwrap_or_default();
-
-                            // Not respecting exlusion_map for now!!
-                            let exclude_centers = &[];
                             let centers_to_check = centers
                                 .as_ref()
                                 .map(|centers| centers.iter().copied().collect::<Vec<u32>>())
@@ -140,7 +132,6 @@ where
                                 });
                             let sessions_to_alert = centers_to_check
                                 .iter()
-                                .filter(|center_id| !exclude_centers.contains(center_id))
                                 .map(|center_id| center_map.get(center_id))
                                 .filter(|center| {
                                     center
@@ -153,40 +144,46 @@ where
                                             .sessions
                                             .iter()
                                             .map(|session| AlertSession::from((session, center)))
+                                            // Filter dose availability
+                                            .filter(|alert_session| match dose {
+                                                DoseFilter::Any => 1_f32
+                                                    .le(&alert_session.session.available_capacity),
+                                                DoseFilter::First => 1_f32.le(&alert_session
+                                                    .session
+                                                    .available_capacity_dose1),
+                                                DoseFilter::Second => 1_f32.le(&alert_session
+                                                    .session
+                                                    .available_capacity_dose2),
+                                            })
+                                            // Filter age requirement
                                             .filter(|alert_session| {
-                                                (match dose {
-                                                    DoseFilter::Any => 1_f32.le(&alert_session
-                                                        .session
-                                                        .available_capacity),
-                                                    DoseFilter::First => 1_f32.le(&alert_session
-                                                        .session
-                                                        .available_capacity_dose1),
-                                                    DoseFilter::Second => 1_f32.le(&alert_session
-                                                        .session
-                                                        .available_capacity_dose2),
-                                                }) && age
-                                                    .map(|age| {
-                                                        age.ge(&alert_session.session.min_age_limit)
-                                                    })
-                                                    .unwrap_or(true)
+                                                age.map(|age| {
+                                                    age.ge(&alert_session.session.min_age_limit)
+                                                })
+                                                .unwrap_or(true)
+                                            })
+                                            // Filter if same alert has been sent already
+                                            .filter(|alert_session| {
+                                                let AlertSession { session, .. } = alert_session;
+                                                exclusion_map.any_variance(
+                                                    &user_id,
+                                                    &session.session_id,
+                                                    session.available_capacity,
+                                                )
                                             })
                                             .collect::<Vec<_>>()
                                     })
                                 })
-                                .map(|center| center.unwrap())
+                                // We can safely call `.unwrap()` here since all the sessions that will reach here
+                                // should have `Some(..)` in it, so safe to `.unwrap()` at this point.
+                                .map(|sessions| sessions.unwrap())
                                 .flatten()
                                 .collect::<Vec<AlertSession>>();
                             if !sessions_to_alert.is_empty() {
                                 let content = tera.generate_alert_content(&sessions_to_alert)?;
                                 tracing::debug!(message = "Found centers for user", %user_id, %email, ?centers, ?sessions_to_alert);
                                 ses_client.send_alert_email(&email, &content).await?;
-                                exclusion_map.insert(
-                                    user_id,
-                                    sessions_to_alert
-                                        .into_iter()
-                                        .map(|session| session.center.center_id)
-                                        .collect(),
-                                );
+                                exclusion_map.add(&user_id, &sessions_to_alert);
                             } else {
                                 tracing::debug!(message = "No centers found for user", %user_id, %email, ?centers);
                             }
@@ -201,7 +198,7 @@ where
             }
         }
 
-        exclusion_map.store_exclusion_map().await?;
+        exclusion_map.store().await?;
         Ok(())
     }
 }
@@ -221,25 +218,6 @@ mod test {
         alert_session::AlertSession, email_client::EmailClient, exclusion_map::ExclusionMap,
         template_engine::TemplateEngine, AlertEngine,
     };
-
-    // type BoxedStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
-
-    // #[derive(Debug)]
-    // struct MockError(BoxedStdError);
-
-    // impl From<BoxedStdError> for MockError {
-    //     fn from(boxed_err: BoxedStdError) -> Self {
-    //         Self(boxed_err)
-    //     }
-    // }
-
-    // impl std::fmt::Display for MockError {
-    //     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    //         write!(f, "Mock Error Occured!")
-    //     }
-    // }
-
-    // impl std::error::Error for MockError {}
 
     async fn get_mock_alerts() -> Result<Vec<AlertFilter>, GetAlertsError> {
         Ok(vec![
@@ -372,7 +350,7 @@ mod test {
         }
     }
 
-    struct MockExclusionMap(HashMap<String, Vec<u32>>);
+    struct MockExclusionMap(HashMap<String, Vec<(String, f32)>>);
 
     impl MockExclusionMap {
         fn new() -> Self {
@@ -382,20 +360,27 @@ mod test {
 
     #[async_trait]
     impl ExclusionMap for MockExclusionMap {
-        type Key = String;
-        type Value = Vec<u32>;
         type Error = Infallible;
 
-        fn _get(&self, _k: &Self::Key) -> Option<&Self::Value> {
-            unimplemented!()
-        }
-
-        fn insert(&mut self, k: Self::Key, v: Self::Value) -> Option<Self::Value> {
-            self.0.insert(k, v)
-        }
-
-        async fn store_exclusion_map(&self) -> Result<(), Self::Error> {
+        async fn store(&self) -> Result<(), Self::Error> {
             Ok(())
+        }
+
+        fn any_variance(&self, _user_id: &str, _session_id: &str, _capacity: f32) -> bool {
+            true
+        }
+
+        fn add(&mut self, user_id: &str, sessions: &[AlertSession]) {
+            let vals = sessions
+                .iter()
+                .map(|session| {
+                    (
+                        session.session.session_id.to_owned(),
+                        session.session.available_capacity,
+                    )
+                })
+                .collect();
+            self.0.insert(user_id.to_owned(), vals);
         }
     }
 
@@ -445,7 +430,7 @@ mod test {
         GaFn: Fn() -> GaFnFut,
         GaFnFut: futures::Future<Output = Result<Vec<AlertFilter>, GetAlertsError>>,
         Fc: FindCenters,
-        Em: ExclusionMap<Key = String, Value = Vec<u32>>,
+        Em: ExclusionMap,
         Ec: EmailClient,
         Te: TemplateEngine,
     {
