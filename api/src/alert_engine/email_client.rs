@@ -1,7 +1,12 @@
+use std::env;
+
 use async_trait::async_trait;
+use once_cell::sync::Lazy;
 use rusoto_core::RusotoError;
 use rusoto_ses::{SendTemplatedEmailError, SendTemplatedEmailRequest, Ses, SesClient};
 use serde_json::json;
+
+static CONFIG: Lazy<EmailConfig> = Lazy::new(EmailConfig::init);
 
 #[async_trait]
 pub trait EmailClient {
@@ -31,11 +36,11 @@ impl EmailClient for SesEmailClient {
 
         let _resp = client
             .send_templated_email(SendTemplatedEmailRequest {
-                source: "Covin Alert <no-reply+covin-alert@email.covin.app>".to_string(),
-                template: "CovinAlert".to_string(),
+                source: CONFIG.from_email.clone(),
+                template: CONFIG.email_template.clone(),
                 destination: rusoto_ses::Destination {
                     to_addresses: Some(vec![email.to_string()]),
-                    bcc_addresses: Some(vec!["covin.alert.no.reply@gmail.com".to_string()]),
+                    bcc_addresses: CONFIG.bcc_emails.clone(),
                     ..Default::default()
                 },
                 template_data: json!({ "content": content }).to_string(),
@@ -44,5 +49,32 @@ impl EmailClient for SesEmailClient {
             .await?;
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct EmailConfig {
+    from_email: String,
+    email_template: String,
+    bcc_emails: Option<Vec<String>>,
+}
+
+impl EmailConfig {
+    fn init() -> Self {
+        let from_email = env::var("FROM_EMAIL").unwrap();
+        let email_template = env::var("EMAIL_TEMPLATE").unwrap();
+        let bcc_emails = env::var("BCC_EMAILS")
+            .map(|val| {
+                val.split(";")
+                    .map(|email| email.trim())
+                    .map(String::from)
+                    .collect::<Vec<String>>()
+            })
+            .ok();
+        Self {
+            from_email,
+            email_template,
+            bcc_emails,
+        }
     }
 }
