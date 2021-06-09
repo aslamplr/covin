@@ -2,14 +2,14 @@ name: Rust
 
 on:
   push:
-    branches: [ main ]
-    paths: 
+    branches: [main]
+    paths:
       - "api/*"
       - ".github/workflows/*"
 
   pull_request:
-    branches: [ main ]
-    paths: 
+    branches: [main]
+    paths:
       - "api/*"
       - ".github/workflows/*"
 
@@ -25,19 +25,27 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: aslamplr/lambda-rust
-      volumes: 
+      volumes:
         - ${{ github.workspace }}:/code
         - /home/github/.cargo/registry:/root/.cargo/registry
-        - /home/github/.cargo/git:/root/.cargo/git 
+        - /home/github/.cargo/git:/root/.cargo/git
     steps:
       - uses: actions/checkout@v2
       - name: AWS lambda build
         run: /usr/local/bin/build.sh
         env:
-         PROFILE: "release"
-         PACKAGE: "false"
+          PROFILE: "release"
+          PACKAGE: "false"
       - run: ls -l target/lambda/release
       - name: SAM build
         run: sam build
       - name: SAM deploy
-        run: echo "sam deploy not done now"
+        if: github.ref == 'refs/heads/main'
+        run: sam deploy --template-file .aws-sam/build/template.yaml --stack-name $SAM_DEPLOY_STACK_NAME --s3-bucket $SAM_DEPLOY_S3_BUCKET --s3-prefix SAM_DEPLOY_S3_PREFIX --region $SAM_DEPLOY_REGION --capabilities CAPABILITY_IAM --no-confirm-changeset
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SAM_DEPLOY_STACK_NAME: ${{ secrets.SAM_DEPLOY_STACK_NAME }}
+          SAM_DEPLOY_S3_BUCKET: ${{ secrets.SAM_DEPLOY_S3_BUCKET }}
+          SAM_DEPLOY_S3_PREFIX: ${{ secrets.SAM_DEPLOY_S3_PREFIX }}
+          SAM_DEPLOY_REGION: ${{ secrets.SAM_DEPLOY_REGION }}
