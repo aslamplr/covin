@@ -41,7 +41,7 @@ jobs:
         run: sam build
       - name: SAM deploy
         if: github.ref == 'refs/heads/main'
-        run: sam deploy --template-file .aws-sam/build/template.yaml --stack-name $SAM_DEPLOY_STACK_NAME --s3-bucket $SAM_DEPLOY_S3_BUCKET --s3-prefix SAM_DEPLOY_S3_PREFIX --region $SAM_DEPLOY_REGION --capabilities CAPABILITY_IAM --no-confirm-changeset
+        run: sam deploy --template-file .aws-sam/build/template.yaml --stack-name $SAM_DEPLOY_STACK_NAME --s3-bucket $SAM_DEPLOY_S3_BUCKET --s3-prefix $SAM_DEPLOY_S3_PREFIX --region $SAM_DEPLOY_REGION --capabilities CAPABILITY_IAM --no-confirm-changeset
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
