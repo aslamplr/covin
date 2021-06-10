@@ -13,6 +13,8 @@ on:
       - "api/*"
       - ".github/workflows/*"
 
+  workflow_dispatch: {}
+
 env:
   CARGO_TERM_COLOR: always
 
