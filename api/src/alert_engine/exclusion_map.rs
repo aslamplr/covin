@@ -78,8 +78,21 @@ impl ExclusionMap for S3ExclusionMap {
                     session.session.available_capacity,
                 )
             })
-            .collect();
-        self.exclusion_map.insert(user_id.to_owned(), vals);
+            .collect::<Vec<_>>();
+        if let Some(existing_vals) = self.exclusion_map.get_mut(user_id) {
+            vals.into_iter().for_each(|(session_id, capacity)| {
+                if let Some(mut exist_val) = existing_vals
+                    .iter_mut()
+                    .find(|(s_id, _cap)| s_id == &session_id)
+                {
+                    exist_val.1 = capacity;
+                } else {
+                    existing_vals.push((session_id, capacity));
+                }
+            });
+        } else {
+            self.exclusion_map.insert(user_id.to_owned(), vals);
+        }
     }
 
     fn any_variance(&self, user_id: &str, session_id: &str, capacity: f32) -> bool {
@@ -187,6 +200,30 @@ mod test {
         assert_eq!(
             exclusion_map.any_variance(user_id, "session-id-1", 1_f32),
             true
+        );
+
+        let session = Session {
+            session_id: "session-id-2".to_string(),
+            available_capacity: 5_f32,
+            ..Default::default()
+        };
+        let sessions_3 = vec![AlertSession {
+            center: &center,
+            session: &session,
+        }];
+        exclusion_map.add(user_id, &sessions_3);
+
+        // Variance should be false, when there is new session added
+        // and previously added session should remain for the user!
+        assert_eq!(
+            exclusion_map.any_variance(user_id, "session-id-1", 5_f32),
+            false
+        );
+
+        // Newly added session should also remain
+        assert_eq!(
+            exclusion_map.any_variance(user_id, "session-id-2", 5_f32),
+            false
         );
     }
 }
