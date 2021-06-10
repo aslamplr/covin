@@ -26,6 +26,12 @@ impl SesEmailClient {
     }
 }
 
+impl Default for SesEmailClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl EmailClient for SesEmailClient {
     type Error = RusotoError<SendTemplatedEmailError>;
@@ -65,7 +71,7 @@ impl EmailConfig {
         let email_template = env::var("EMAIL_TEMPLATE").unwrap();
         let bcc_emails = env::var("BCC_EMAILS")
             .map(|val| {
-                val.split(";")
+                val.split(';')
                     .map(|email| email.trim())
                     .map(String::from)
                     .collect::<Vec<String>>()

@@ -10,6 +10,8 @@ use super::alert_session::AlertSession;
 const EXCLUSION_MAP_S3_BUCKET: &str = "covin-transactions";
 const EXCLUSION_MAP_S3_KEY: &str = "exclusion_map.json";
 
+const VARIANCE_THRESHOLD: &f32 = &1_f32;
+
 #[async_trait]
 pub trait ExclusionMap {
     type Error: std::error::Error + Sync + Send + 'static;
@@ -104,7 +106,7 @@ impl ExclusionMap for S3ExclusionMap {
         sessions_for_user
             .iter()
             .find(|(s_id, _cap)| s_id == session_id)
-            .map(|(_s_id, cap)| cap > &capacity || cap < &capacity)
+            .map(|(_s_id, cap)| (cap - capacity).abs().ge(VARIANCE_THRESHOLD))
             .unwrap_or(true)
     }
 

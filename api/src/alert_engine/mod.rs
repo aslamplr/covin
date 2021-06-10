@@ -418,7 +418,7 @@ mod test {
             sessions_to_alert.iter().for_each(|alert_serssion| {
                 use std::fmt::Write;
 
-                let _ = write!(res, "{}\n", alert_serssion);
+                let _ = writeln!(res, "{}", alert_serssion);
             });
             Ok(res)
         }

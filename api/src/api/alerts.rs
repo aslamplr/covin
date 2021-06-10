@@ -174,6 +174,12 @@ mod service {
         }
     }
 
+    impl Default for AlertService {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     #[derive(Debug, Error)]
     pub enum GetAlertsError {
         #[error("Rusoto Scan Error")]
